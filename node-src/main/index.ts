@@ -80,6 +80,7 @@ import { plugins, initPlugins, installPlugin, killPluginHost } from './plugins'
 import { DefaultTheme, Theme, loadTheme } from './themes'
 import { ctrlLogger } from './utils'
 import { Fileio } from './fileio'
+import { GameLauncher } from './gameLauncher'
 
 
 let nanoid
@@ -105,6 +106,11 @@ if (process.platform === 'win32') {
 // initializing all independent globals
 let attachedDeviceFingerprints: MakeShiftPortFingerprint[] = []
 let knownDeviceFingerprints: MakeShiftPortFingerprint[] = [];
+const gameLauncher = new GameLauncher(() => {
+  const device = knownDeviceFingerprints[0]
+  return device ? Ports[device.deviceSerial] : undefined
+});
+(plugins as any).gameLauncher = gameLauncher
 let mainWindow: Maybe<BrowserWindow> = Nothing
 let splashWindow: Maybe<BrowserWindow> = Nothing
 let tray: Tray | null = null
@@ -342,6 +348,8 @@ app.whenReady()
     await initCues({ logLvl: mainLogLevel })
     attachCueWatchers()
     await initLayouts()
+    await installDefaultGameLauncherCue()
+    await gameLauncher.initialize()
     log.debug('Loaded Cues:')
     cues.forEach((val, key) => {
       log.debug(`${key}: ${nspect(val, 1)}`)
@@ -813,7 +821,6 @@ async function runCue(eventData) {
   }
 }
 
-
 export async function detachCueFromEvent({ layerName, event, cueId }:
   {
     layerName: string,
@@ -1005,6 +1012,28 @@ async function loadLayouts() {
   // log.debug(nspect(savedLayout, 4))
   // log.debug(nspct2(tempLayout))
   log.debug(`Loaded Layouts: ${nspct2(layout)}`)
+}
+
+async function installDefaultGameLauncherCue() {
+  const cueId = 'examples/steam-game-carousel.cue.js'
+  if (!cueExists(cueId)) return
+
+  await cueWatcherHandler.add(cueId)
+  const cue = cues.get(cueId)
+  await importCueModule(cue)
+  const events = [
+    'sensor-0-dial-increment',
+    'sensor-0-dial-decrement',
+    'sensor-0-button-pressed',
+  ]
+  let changed = false
+  for (const event of events) {
+    if (!layout.layers[0].has(event)) {
+      layout.layers[0].set(event, cue)
+      changed = true
+    }
+  }
+  if (changed) await saveLayouts()
 }
 
 // Handler function, declared here

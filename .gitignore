@@ -19,6 +19,8 @@ env.d.ts
 
 # Build output
 out/
+out-*/
+out.*/
 dist/
 .build/
 dist-electron/

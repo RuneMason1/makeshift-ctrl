@@ -18,6 +18,7 @@ switch (process.env.BUILD_TYPE) {
 
 
 module.exports = {
+  outDir: process.env.MAKESHIFT_PACKAGE_OUT || 'out',
   packagerConfig: {
     asar: true,
     junk: true,

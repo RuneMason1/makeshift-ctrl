@@ -64,16 +64,14 @@ export async function initCues(opts: { logLvl?: LogLevel}) {
   log.info(`Initializing CueHandler in ${process.env.CUES}`)
   const examplesFolder = join(process.env.CUES, 'examples')
   cueTempDir = join(process.env.TEMP, 'temp')
-  if (existsSync(examplesFolder) === false) {
-    // this should be on first run or if the user nukes
-    // the ../AppData/../makeshift-ctrl folder
-    const dest = examplesFolder
-    const src = join(process.env.RESOURCES, 'examples')
-    await ensureDir(dest)
-    const examples = await readdir(src)
-    examples.forEach((filePath) => {
-      copyFileSync(join(src, filePath), join(dest, filePath))
-    })
+  const examplesSource = join(process.env.RESOURCES, 'examples')
+  await ensureDir(examplesFolder)
+  const examples = await readdir(examplesSource)
+  for (const filePath of examples) {
+    const destination = join(examplesFolder, filePath)
+    if (!existsSync(destination)) {
+      copyFileSync(join(examplesSource, filePath), destination)
+    }
   }
 
   cueWatcher = chokidar.watch(process.env.CUES, {
