@@ -5,7 +5,8 @@ import { inject, ref, computed, onMounted, watch, Ref, onUnmounted, ComputedRef,
 import BlocklyDarkTheme from '@blockly/theme-dark'
 //@ts-ignore
 import BlocklyModernTheme from '@blockly/theme-modern'
-import Blockly, { Block, WorkspaceSvg } from 'blockly'
+import * as Blockly from 'blockly'
+import type { Block, WorkspaceSvg } from 'blockly'
 import { javascriptGenerator } from 'blockly/javascript'
 
 import { MakeShiftDeviceEvents } from '@eos-makeshift/serial'
@@ -251,7 +252,7 @@ function runOnceSaved(cue: Cue) {
     console.log('cue is the one we want')
     MakeShiftApi.call.runCue({
       cueId: cue.id,
-      contents: [],
+      contents: new Uint8Array(),
     })
   }
   removeCueListener()

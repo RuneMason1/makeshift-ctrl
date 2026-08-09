@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "ESNext",
     "module": "ESNext",
-    "moduleResolution": "node",
+    "moduleResolution": "Bundler",
     "importHelpers": true,
     "allowJs": true,
     "checkJs": true,
@@ -12,7 +12,10 @@
     "sourceMap": true,
     "baseUrl": "./",
     "strict": true,
-    "paths": {},
+    "paths": {
+      "@eos-makeshift/msg": ["node_modules/@eos-makeshift/msg/lib/types/index.d.ts"],
+      "@eos-makeshift/serial": ["node_modules/@eos-makeshift/serial/lib/types/index.d.ts"]
+    },
     "allowSyntheticDefaultImports": true,
     "skipLibCheck": true,
     "declaration": true,

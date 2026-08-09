@@ -1,4 +1,5 @@
 import stylelint from 'stylelint';
+import { LogLevel } from '@eos-makeshift/msg';
 export declare const DefaultTheme: {
     cssClass: string;
     isLight: boolean;
@@ -9,6 +10,9 @@ export type Theme = {
     isLight: boolean;
     cssRaw: string;
 };
+export declare function initThemes(opts: {
+    logLvl?: LogLevel;
+}): void;
 /**
  *
  *

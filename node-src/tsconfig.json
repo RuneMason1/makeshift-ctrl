@@ -3,7 +3,7 @@
     "target": "ESNext",
     "composite": true,
     "module": "ESNext",
-    "moduleResolution": "Node",
+    "moduleResolution": "Bundler",
     "jsx": "preserve",
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,

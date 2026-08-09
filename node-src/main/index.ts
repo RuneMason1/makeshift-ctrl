@@ -189,11 +189,9 @@ const log = msgen.getLevelLoggers()
 // Set up app directories that are relative to install location
 declare const MAKESHIFT_CTRL_VITE_DEV_SERVER_URL: string;
 declare const MAKESHIFT_CTRL_VITE_NAME: string;
-const workingDir = __dirname
 const devUrl = MAKESHIFT_CTRL_VITE_DEV_SERVER_URL as string
 
-process.env.DIST_NODE = join(workingDir, '..')
-process.env.APPROOT = join(process.env.DIST_NODE, '../..')
+process.env.APPROOT = app.getAppPath()
 process.env.DIST = join(process.env.APPROOT, 'dist')
 process.env.DIST_NODE = join(process.env.DIST, 'node')
 process.env.DIST_RENDERER = join(process.env.DIST, 'renderer')
@@ -339,16 +337,16 @@ app.whenReady()
     // Load resources with preload requirements
     const loadingBarrier = []
     await Promise.all(preloadBarrier)
+    // Layout restoration imports assigned cues, so the cue watcher and its
+    // temporary module directory must exist before layouts are loaded.
+    await initCues({ logLvl: mainLogLevel })
+    attachCueWatchers()
     await initLayouts()
     log.debug('Loaded Cues:')
     cues.forEach((val, key) => {
       log.debug(`${key}: ${nspect(val, 1)}`)
     })
     // loadingBarrier.push(loadLayouts())
-
-    // cues can't be a part of the preload because the attach needs to be chained
-    await initCues({ logLvl: mainLogLevel })
-    attachCueWatchers()
 
     PortAuthority.on(PortAuthorityEvents.port.opened, addKnownDevice)
     PortAuthority.on(PortAuthorityEvents.port.closed, removeKnownDevice)
@@ -673,13 +671,16 @@ async function createMainWindow() {
 
   if (store.has(storeKeys.MainWindowState)) {
     windowPos = store.get(storeKeys.MainWindowState)
+    if (windowPos.width < 800 || windowPos.height < 600) {
+      windowPos = { x: 50, y: 50, width: 1000, height: 800 }
+    }
   }
 
   const mw = new BrowserWindow({
     show: false,
     title: 'makeshift-ctrl',
-    minWidth: 300,
-    minHeight: 300,
+    minWidth: 800,
+    minHeight: 600,
     x: windowPos.x,
     y: windowPos.y,
     width: windowPos.width,
@@ -700,8 +701,9 @@ async function createMainWindow() {
     mw.loadFile(mainHtmlEntry)
   } else {
     mw.loadURL(devUrl)
-    // Open devTool if the app is not packaged
-    mw.webContents.openDevTools()
+    if (process.env.MAKESHIFT_OPEN_DEVTOOLS === '1') {
+      mw.webContents.openDevTools()
+    }
   }
 
   // attach PA listeners
@@ -787,19 +789,27 @@ async function serialLogToMainWindow(data: LogMessage) {
  * Cue section
  */
 
-function runCue(eventData) {
+async function runCue(eventData) {
   log.debug(`running cue attached to event: ${nspct2(eventData)}`)
-  const targetCue = layout.layers[currentLayer].get(eventData.event)
+  const eventName = typeof eventData?.event === 'string' ? eventData.event.trim() : ''
+  const targetCue = layout.layers[currentLayer]?.get(eventName)
   if (typeof targetCue !== 'undefined') {
     log.debug(`found attached cue with id: ${targetCue.id}`)
     log.debug(`cue fullPath: ${targetCue.fullPath}`)
     try {
-      loadedCueModules[targetCue.id].run(eventData)
+      // Layouts and serial ports initialize independently. Recover here if a cue
+      // module was not ready when the first hardware event arrived.
+      if (typeof loadedCueModules[targetCue.id]?.run !== 'function') {
+        log.warn(`Cue ${targetCue.id} was not loaded; reloading before execution`)
+        await importCueModule(targetCue)
+      }
+      await Promise.resolve(loadedCueModules[targetCue.id].run(eventData))
+      log.debug(`Cue ${targetCue.id} completed for event: ${eventName}`)
     } catch (err) {
-      log.error(err)
+      log.error(`Cue ${targetCue.id} failed for event ${eventName}: ${err instanceof Error ? err.stack ?? err.message : err}`)
     }
   } else {
-    log.debug(`no cue attached to event: ${eventData.event}`)
+    log.debug(`no cue attached to event: ${eventName}`)
   }
 }
 
@@ -963,7 +973,7 @@ async function loadLayouts() {
     layerLabels: savedLayout.layerLabels,
     layers: []
   }
-  savedLayout.layers.forEach(async (layerArray) => {
+  for (const layerArray of savedLayout.layers) {
     // log.debug(`layerArray: ${nspct2(layerArray)}`)
     const existsArray = []
     for (const pair of layerArray) {
@@ -973,11 +983,13 @@ async function loadLayouts() {
         try {
           await cueWatcherHandler.add(cueId)
 
-          importCueModule(cues.get(cueId))
+          await importCueModule(cues.get(cueId))
           pair[1] = cues.get(cueId)
           existsArray.push(pair)
           // log.debug(`array pair pt 2 ${nspct2(pair)}`)
-        } catch (e) {}
+        } catch (e) {
+          log.warn(`Could not load cue ${cueId} for ${pair[0]}: ${e}`)
+        }
       }
     }
 
@@ -985,7 +997,7 @@ async function loadLayouts() {
     const layerMap = new Map(existsArray) as EventCueMap
     // log.debug(`layerMap: ${nspct2(layerMap)}`)
     tempLayout.layers.push(layerMap)
-  })
+  }
 
   layout.layers = tempLayout.layers
   layout.layerLabels = tempLayout.layerLabels

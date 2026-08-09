@@ -10,7 +10,7 @@ import { pathToFileURL } from 'node:url'
 
 import { Msg, nspct2, LogLevel, MsgLevel, nspect, logRank } from '@eos-makeshift/msg'
 
-import * as Nut from '@nut-tree/nut-js'
+import * as Nut from '@nut-tree-fork/nut-js'
 import { ctrlLogger } from './utils'
 import { dialog } from 'electron'
 import { plugins } from './plugins'

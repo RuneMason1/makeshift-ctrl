@@ -27,7 +27,7 @@ export default defineConfig({
   build: {
     minify: false,
     outDir: pluginDir,
-    target: 'node18',
+    target: 'node22',
     rollupOptions: {
       input: getInputPaths(pluginSrcDir),
       output: {
@@ -35,10 +35,10 @@ export default defineConfig({
       },
       external: [
         '@eos-makeshift/serial',
-        '@nut-tree/nut-js',
+        '@nut-tree-fork/nut-js',
         'uuid',
         'nanoid',
-        'blockly',
+        /^blockly(?:\/|$)/,
         'original-fs',
       ],
       plugins: [

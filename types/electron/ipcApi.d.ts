@@ -23,18 +23,23 @@ export declare const ctrlIpcApi: {
         cuesAttachedToEvent: string;
         cueById: string;
         cueByFolder: string;
+        currentView: string;
         defaultTheme: string;
         themeFromPath: string;
     };
     set: {
         cueFile: string;
         cueForEvent: string;
+        currentView: string;
         serialWorkspaceAsCue: string;
     };
     delete: {
         workspace: string;
     };
     onEv: {
+        app: {
+            updateAvailable: string;
+        };
         blockly: {
             toolboxUpdate: string;
             blocksUpdate: string;
@@ -56,9 +61,11 @@ export declare const ctrlIpcApi: {
     };
 };
 export declare const storeKeys: {
+    LogLevel: string;
     UuidNamespace: string;
     MainWindowState: string;
     DeviceLayout: string;
+    CurrentView: string;
 };
 export type CtrlIpcApi = typeof ctrlIpcApi;
 export type StoreKeys = typeof storeKeys;

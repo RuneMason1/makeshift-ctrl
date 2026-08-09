@@ -24,7 +24,7 @@ import Icon from './Icon.vue'
 import IconButton from './IconButton.vue'
 import toolbarSpacer from './ToolBarSpacer.vue'
 // import { watchResize } from "../composables/resizer";
-import { Cue, CueMap } from "../../types/electron/main/cues";
+import { Cue, CueId, CueMap } from "../../types/electron/main/cues";
 import TextButton from "./TextButton.vue";
 import { nanoid } from '../utilities/nanoidTool'
 import { rndrCtrlAPI } from '../renderer'
@@ -36,6 +36,7 @@ const acePath = import.meta.env.BASE_URL + 'ace-builds/src-min-noconflict'
 const cues = inject('cues') as Ref<CueMap>
 const currentDevice = inject('current-device') as Ref<MakeShiftPortFingerprint>
 const selectedEvent = inject('selected-event') as Ref<string>
+const selectedEventCues = inject('selected-event-cues') as Ref<CueId | undefined>
 const DeviceEvents = inject('makeshift-device-events') as MakeShiftDeviceEvents
 
 const newCueContents = `// Welcome to makesh*t-ctrl alpha!
@@ -75,10 +76,10 @@ ace.config.set("basePath", acePath)
 ace.config.set("workerPath", acePath)
 ace.config.set("loadWorkerFromBlob", false)
 
-ace.config.loadModule("ace/keybinding/emacs")
-ace.config.loadModule("ace/keybinding/sublime")
-ace.config.loadModule("ace/keybinding/vim")
-ace.config.loadModule("ace/keybinding/vscode")
+ace.config.loadModule("ace/keybinding/emacs", () => {})
+ace.config.loadModule("ace/keybinding/sublime", () => {})
+ace.config.loadModule("ace/keybinding/vim", () => {})
+ace.config.loadModule("ace/keybinding/vscode", () => {})
 const availableKeyboardHandlers = [
   'ace/keyboard/emacs',
   'ace/keyboard/sublime',
@@ -316,6 +317,7 @@ async function assignCueToEvent() {
     return
   }
   console.log(`Cue assigned`)
+  selectedEventCues.value = id
   handlePostSave(fullPath)
 }
 

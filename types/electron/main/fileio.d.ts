@@ -1,5 +1,3 @@
-/// <reference types="node" />
-/// <reference types="node" />
 import * as fs from 'node:fs/promises';
 import { Maybe } from 'purify-ts';
 import { PathLike } from 'fs';

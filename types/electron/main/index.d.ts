@@ -1,6 +1,6 @@
 import { BrowserWindow } from 'electron';
 import { Block } from 'blockly';
-import { MakeShiftPortFingerprint, MakeShiftDeviceEvents, MakeShiftSerialEvents } from '@eos-makeshift/serial';
+import { MakeShiftDeviceEvents, MakeShiftSerialEvents } from '@eos-makeshift/serial';
 import { Maybe } from 'purify-ts/Maybe';
 import { saveCueFile, Cue, CueId, CueMap } from './cues';
 import { Theme } from './themes';
@@ -29,7 +29,10 @@ export declare function getMainWindow(): Maybe<BrowserWindow>;
  */
 declare const ipcMainCallHandler: {
     openCueFolder: () => Promise<void>;
-    runCue: (cueId: any) => Promise<void>;
+    runCue: (data: {
+        cueId: CueId;
+        contents: Uint8Array;
+    }) => Promise<void>;
     fetchBlocklyToolbox: () => Promise<void>;
     fetchBlocklyBlocks: () => Promise<void>;
     fetchBlocklyDefaultWorkspace: () => Promise<void>;
@@ -40,29 +43,18 @@ declare const ipcMainCallHandler: {
  * Gets state data in various formats
  */
 declare const ipcMainGetHandler: {
-    connectedDevices: () => Promise<MakeShiftPortFingerprint[]>;
+    connectedDevices: () => Promise<any>;
     deviceEvents: () => Promise<MakeShiftDeviceEvents>;
     serialEvents: () => Promise<MakeShiftSerialEvents>;
-    hardwareDescriptors: () => Promise<{
-        MakeShift: any;
-        Sensors: any;
-    }>;
+    hardwareDescriptors: () => Promise<any>;
     eventsAsList: () => Promise<any[]>;
-    logRank: () => Promise<{
-        all: number;
-        debug: number;
-        deviceEvent: number;
-        info: number;
-        warn: number;
-        error: number;
-        fatal: number;
-        none: number;
-    }>;
+    logRank: () => Promise<any>;
     allCues: () => Promise<CueMap>;
     cuesAttachedToEvent: (event: string) => Promise<CueId | undefined>;
     cueById: (id: any) => Promise<Cue>;
     cueByFolder: (folder: any) => Promise<CueMap>;
     clientSize: () => Promise<Size>;
+    currentView: () => Promise<string>;
     blocklyToolbox: () => Promise<any>;
     allBlocklySerialWorkspaceNames: () => Promise<string[]>;
     blocklySerialWorkspace: (workspaceKey: any) => Promise<any>;
@@ -79,6 +71,7 @@ declare const ipcMainGetHandler: {
 declare const ipcMainSetHandler: {
     serialWorkspaceAsCue: (serialWorkspace: any) => Promise<Cue>;
     cueFile: typeof saveCueFile;
+    currentView: (view: string) => Promise<void>;
     blocklyWorkspaceForEvent: (data: {
         workspaceName: string;
         event: string;

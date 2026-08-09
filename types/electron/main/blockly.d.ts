@@ -1,6 +1,7 @@
 import * as chokidar from 'chokidar';
-import '@blockly/field-grid-dropdown';
+import 'blockly/blocks';
 import { Maybe } from 'purify-ts/Maybe';
+import * as Store from 'electron-store';
 import { Cue } from './cues';
 export type BlockGroup = {
     name: string;
@@ -21,9 +22,9 @@ export declare const blocklist: {
 export declare const workspaceList: {
     [key: string]: any;
 };
-export declare const workspaceStore: import("electron-store")<Record<string, unknown>>;
+export declare const workspaceStore: Store.default<Record<string, unknown>>;
 export declare function mirrorWorkspace(serialWorkspace: Maybe<any>): Promise<void>;
-export declare function generateCodeFromWorkspace(serialWorkspace: any): Promise<Maybe<any>>;
+export declare function generateCodeFromWorkspace(serialWorkspace: any): Promise<Maybe<string>>;
 export declare function initBlockly(): Promise<void>;
 export declare function loadBlockGroup(directoryPath: string): Promise<Maybe<BlockGroup>>;
 export declare function getToolbox(): any;

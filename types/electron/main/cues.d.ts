@@ -1,5 +1,5 @@
-/// <reference types="node" />
 import * as chokidar from 'chokidar';
+import { LogLevel } from '@eos-makeshift/msg';
 export type IModule = typeof Electron.CrossProcessExports;
 export interface Cue {
     id: CueId;
@@ -31,7 +31,9 @@ export declare const cues: CueMap;
 export declare const loadedCueModules: {
     [key: CueId]: CueModule;
 };
-export declare function initCues(): Promise<void>;
+export declare function initCues(opts: {
+    logLvl?: LogLevel;
+}): Promise<void>;
 export declare function cueExists(cueId: CueId): boolean;
 /**
  * Creates a new cue from a path relative to the default cue folder

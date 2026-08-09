@@ -4,7 +4,9 @@ import { Msg, nspct2 } from '@eos-makeshift/msg';
 
 // @ts-ignore
 import { javascriptGenerator, Order } from 'blockly/javascript';
-import Blockly, { Block, Workspace } from 'blockly';
+import * as Blockly from 'blockly/core';
+import 'blockly/blocks';
+import type { Block } from 'blockly/core';
 import { FieldGridDropdown } from '@blockly/field-grid-dropdown'
 
 import * as Crypto from 'crypto'
@@ -15,10 +17,8 @@ import * as Store from 'electron-store'
 
 import { ctrlLogger, loadJsonFile } from './utils';
 import { Cue } from './cues';
-import { load } from 'blockly/core/serialization/workspaces';
 import { getMainWindow } from '.';
 import { ctrlIpcApi, storeKeys } from '../ipcApi'
-import { block } from 'blockly/core/tooltip';
 
 import { Fileio } from './fileio'
 
@@ -42,7 +42,7 @@ msgen.logger = ctrlLogger
 const log = msgen.getLevelLoggers()
 
 export let workspaceWatcher: chokidar.FSWatcher
-const workspaceMirror = new Workspace()
+const workspaceMirror = new Blockly.Workspace()
 export const groups: BlockGroup[] = []
 export const blocklist: { [key: string]: MakeShiftBlockTuple } = {}
 export const workspaceList: { [key: string]: any } = {}
@@ -57,7 +57,7 @@ let BlocklyAppDataDir = ''
 
 javascriptGenerator['set_stored_variable'] = function (block, generator) {
   var dropdown_name = block.getFieldValue('NAME');
-  var value_name = generator.valueToCode(block, 'NAME', javascriptGenerator.Order.ATOMIC);
+  var value_name = generator.valueToCode(block, 'NAME', Order.ATOMIC);
   // TODO: Assemble javascript into code variable.
   var code = '...\n';
   return code;
@@ -310,7 +310,7 @@ export async function sendBlocks() {
 }
 
 async function generateDefaultWorkspace() {
-  const workspace = new Workspace()
+  const workspace = new Blockly.Workspace()
 
   log.debug(`blocklist ${nspct2(blocklist)}`)
   Blockly.serialization.blocks.append(blocklist['default_cue'].block, workspace)

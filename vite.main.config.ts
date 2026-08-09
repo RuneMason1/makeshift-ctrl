@@ -1,7 +1,7 @@
 import { rmSync } from 'fs'
 import { defineConfig } from 'vite';
 
-const mainDir = 'dist/node/main/'
+const mainDir = '.vite/build/'
 
 rmSync(mainDir, { recursive: true, force: true })
 
@@ -9,15 +9,19 @@ export default defineConfig({
   build: {
     minify: false,
     outDir: mainDir,
-    target: 'node18',
+    target: 'node22',
     rollupOptions: {
+      output: {
+        entryFileNames: 'main.js',
+      },
       external: [
         '@eos-makeshift/serial',
-        '@nut-tree/nut-js',
+        '@nut-tree-fork/nut-js',
         'uuid',
         'nanoid',
-        'blockly',
+        /^blockly(?:\/|$)/,
         'original-fs',
+        'stylelint',
       ],
     }
   },

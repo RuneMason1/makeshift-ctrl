@@ -3,7 +3,8 @@
 import BlocklyDarkTheme from '@blockly/theme-dark'
 //@ts-ignore
 import BlocklyModernTheme from '@blockly/theme-modern'
-import Blockly, { Block, WorkspaceSvg } from 'blockly'
+import * as Blockly from 'blockly'
+import type { Block, WorkspaceSvg } from 'blockly'
 import { javascriptGenerator } from 'blockly/javascript'
 
 import { MakeShiftDeviceEvents } from '@eos-makeshift/serial'

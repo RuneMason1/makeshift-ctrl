@@ -5,7 +5,6 @@ import { Cue, CueMap, CueId } from 'types/electron/main/cues'
 import App from './App.vue'
 import { Size } from 'types/electron/main'
 import { SimplePopup } from './composables/popup'
-import { Selected } from 'blockly/core/events/events_selected'
 import { Maybe, Nothing } from 'purify-ts'
 import { View } from './renderer'
 export type SensorEventDetails = {
@@ -45,7 +44,7 @@ const cueRoot: Folder = {
     cueDirectory: ref(cueRoot) as Ref<Folder>,
     logLevel: ref('info') as Ref<LogLevel>,
     selectedEvent: ref('sensor-0-dial-increment'),
-    selectedEventCues: ref(''),
+    selectedEventCues: ref(undefined) as Ref<CueId | undefined>,
     selectedView: ref('blockly') as Ref<View>,
     logRank: await window.MakeShiftCtrl.get.logRank(),
     clientSize: ref(await window.MakeShiftCtrl.get.clientSize()) as Ref<Size>,
@@ -55,8 +54,16 @@ const cueRoot: Folder = {
 
   console.log(Constants.HardwareDescriptors)
 
-  // set up initial selected event cue state
-  state.selectedEventCues.value = await window.MakeShiftCtrl.get.cuesAttachedToEvent(state.selectedEvent.value)
+  // Start on the first configured control so an existing assignment is
+  // immediately visible instead of appearing to be missing.
+  for (const eventName of Constants.EventsList) {
+    const attachedCue = await window.MakeShiftCtrl.get.cuesAttachedToEvent(eventName)
+    if (attachedCue !== undefined) {
+      state.selectedEvent.value = eventName
+      state.selectedEventCues.value = attachedCue
+      break
+    }
+  }
 
   state.selectedView.value = await window.MakeShiftCtrl.get.currentView()
 

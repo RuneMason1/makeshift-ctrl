@@ -36,22 +36,18 @@ export async function updateAce() {
 
   console.log('public/ace-builds is outdated, copying...')
 
-  fsEx.copy(`${CWD}/node_modules/ace-builds/src-min-noconflict`, `${CWD}/public/ace-builds/src-min-noconflict`, async (err) => {
-    if (err) {
-      console.log(err)
-      return 1
-    } else {
-      console.log('Copying finished, updating aceversion file...')
-      try {
-        const data = new Uint8Array(Buffer.from(targetAceVersion.raw))
-        await writeFile('public/ace-builds/aceversion', data)
-        console.log('Finished.')
-      } catch (err) {
-        console.log(err)
-        console.log(`Error writing \'${targetAceVersion.raw}\' into aceversion file, exiting`)
-        return 1
-      }
-    }
-  })
-
+  try {
+    await fsEx.copy(
+      `${CWD}/node_modules/ace-builds/src-min-noconflict`,
+      `${CWD}/public/ace-builds/src-min-noconflict`,
+    )
+    console.log('Copying finished, updating aceversion file...')
+    await writeFile('public/ace-builds/aceversion', targetAceVersion.raw)
+    console.log('Finished.')
+    return 0
+  } catch (err) {
+    console.log(err)
+    console.log(`Error updating public ace-builds to '${targetAceVersion.raw}', exiting`)
+    return 1
+  }
 }

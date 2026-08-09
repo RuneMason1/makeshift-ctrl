@@ -9,7 +9,7 @@ rmSync(preloadDir, { recursive: true, force: true })
 export default defineConfig({
   build: {
     minify: false,
-    target: 'node18',
+    target: 'node22',
     outDir: preloadDir,
   },
   publicDir: false,
