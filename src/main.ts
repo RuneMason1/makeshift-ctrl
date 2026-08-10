@@ -121,11 +121,11 @@ const cueRoot: Folder = {
   })
 
   function addCueToFolderList(cue: Cue) {
-    emplaceCue(cue, state.cueDirectory.value, cue.id.split('/').slice(0, -1))
+    emplaceCue(cue, state.cueDirectory.value, cuePathParts(cue.id).slice(0, -1))
   }
 
   function removeCueFromFolderList(cue: Cue) {
-    extractCue(state.cueDirectory.value, cue.id.split('/'))
+    extractCue(state.cueDirectory.value, cuePathParts(cue.id))
   }
 
   // console.log(state.cues.value)
@@ -160,6 +160,10 @@ const cueRoot: Folder = {
       postMessage({ payload: 'removeLoading' }, '*')
     })
 })
+
+function cuePathParts(cueId: string): string[] {
+  return cueId.replaceAll('\\', '/').split('/').filter(Boolean)
+}
 
 function emplaceCue(cue: Cue, currFolder: Folder, relativePath: string[]) {
   // console.log(currFolder)

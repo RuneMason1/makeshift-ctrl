@@ -7,10 +7,15 @@ import { MakeShiftPort, PacketType } from '@eos-makeshift/serial'
 
 type Game = { appId: string, name: string, lastPlayed: number, artworkPath: string }
 
-const ART_SIZE = 112
+const ART_SIZE = 80
 const CHUNK_PIXELS = 118
 const TITLE_LIMIT_BYTES = 48
 const CAROUSEL_TIMEOUT_MS = 12_000
+const ARTWORK_SETTLE_MS = 90
+const GAME_LIST_BEGIN = 11 as PacketType
+const GAME_LIST_ITEM = 12 as PacketType
+const GAME_LIST_COMMIT = 13 as PacketType
+const LOCAL_GAME_LIMIT = 64
 
 function capture(text: string, key: string): string {
   return new RegExp(`"${key}"\\s+"([^"]*)"`, 'i').exec(text)?.[1] ?? ''
@@ -124,16 +129,48 @@ export class GameLauncher {
   private visible = false
   private transferId = 0
   private hideTimer?: NodeJS.Timeout
+  private artworkTimer?: NodeJS.Timeout
   private artworkCache = new Map<string, Promise<Buffer>>()
+  private showArtwork = true
 
   constructor(private readonly getPort: () => MakeShiftPort | undefined) {}
 
   async initialize(): Promise<void> {
     this.games = await discoverSteamGames()
+    this.syncToDevice()
     void this.prewarmArtworkCache()
   }
 
-  async handleEvent(eventName: string): Promise<boolean> {
+  setArtworkEnabled(enabled: boolean): void {
+    this.showArtwork = enabled
+    if (!enabled) this.syncToDevice()
+  }
+
+  syncToDevice(port = this.getPort()): void {
+    if (this.showArtwork || !port || this.games.length === 0) return
+    const games = this.games.slice(0, LOCAL_GAME_LIMIT)
+    if (!port.sendPacket(GAME_LIST_BEGIN, Buffer.from([games.length]))) return
+    for (const game of games) {
+      const appId = Buffer.from(game.appId, 'ascii')
+      const title = boundedTitle(game.name)
+      const item = Buffer.allocUnsafe(2 + appId.length + title.length)
+      item[0] = appId.length
+      item[1] = title.length
+      appId.copy(item, 2)
+      title.copy(item, 2 + appId.length)
+      if (!port.sendPacket(GAME_LIST_ITEM, item)) return
+    }
+    port.sendPacket(GAME_LIST_COMMIT)
+  }
+
+  async handleDeviceMessage(message: string): Promise<void> {
+    if (!message.startsWith('GAME_LAUNCH:')) return
+    const appId = message.slice('GAME_LAUNCH:'.length).trim()
+    if (!/^\d+$/.test(appId) || !this.games.some(game => game.appId === appId)) return
+    await shell.openExternal(`steam://run/${appId}`)
+  }
+
+  async handleEvent(eventName: string, showArtwork = true): Promise<boolean> {
     if (eventName === 'sensor-0-dial-increment' || eventName === 'sensor-0-dial-decrement') {
       if (this.games.length === 0) await this.initialize()
       if (this.games.length === 0) return true
@@ -146,7 +183,7 @@ export class GameLauncher {
         this.selectedIndex = 0
         this.visible = true
       }
-      void this.showSelectedGame()
+      this.showSelectedGame(showArtwork)
       return true
     }
 
@@ -159,20 +196,35 @@ export class GameLauncher {
     return false
   }
 
-  private async showSelectedGame(): Promise<void> {
+  private showSelectedGame(showArtwork: boolean): void {
     const port = this.getPort()
     if (!port) return
     const transferId = ++this.transferId
     const game = this.games[this.selectedIndex]
-    const artwork = await this.cachedArtwork(game)
-    if (transferId !== this.transferId) return
     const title = boundedTitle(game.name)
     const begin = Buffer.allocUnsafe(5 + title.length)
-    begin.writeUInt16BE(ART_SIZE, 0)
-    begin.writeUInt16BE(ART_SIZE, 2)
+    begin.writeUInt16BE(showArtwork ? ART_SIZE : 0, 0)
+    begin.writeUInt16BE(showArtwork ? ART_SIZE : 0, 2)
     begin[4] = title.length
     title.copy(begin, 5)
     if (!port.sendPacket(PacketType.GAME_CARD_BEGIN, begin)) return
+
+    if (this.artworkTimer) clearTimeout(this.artworkTimer)
+    this.artworkTimer = undefined
+    if (showArtwork) {
+      this.artworkTimer = setTimeout(() => {
+        void this.sendArtwork(game, transferId)
+      }, ARTWORK_SETTLE_MS)
+      this.artworkTimer.unref()
+    }
+    this.resetHideTimer()
+  }
+
+  private async sendArtwork(game: Game, transferId: number): Promise<void> {
+    const port = this.getPort()
+    if (!port || transferId !== this.transferId) return
+    const artwork = await this.cachedArtwork(game)
+    if (transferId !== this.transferId) return
 
     for (let pixelOffset = 0; pixelOffset < ART_SIZE * ART_SIZE; pixelOffset += CHUNK_PIXELS) {
       if (transferId !== this.transferId) return
@@ -181,13 +233,12 @@ export class GameLauncher {
       chunk.writeUInt32BE(pixelOffset, 0)
       artwork.copy(chunk, 4, pixelOffset * 2, (pixelOffset + pixelCount) * 2)
       if (!port.sendPacket(PacketType.GAME_ART_CHUNK, chunk)) return
-      if (pixelOffset % (CHUNK_PIXELS * 8) === 0) {
+      if (pixelOffset % (CHUNK_PIXELS * 4) === 0) {
         await new Promise(resolve => setImmediate(resolve))
       }
     }
     if (transferId !== this.transferId) return
     port.sendPacket(PacketType.GAME_CARD_COMMIT)
-    this.resetHideTimer()
   }
 
   private cachedArtwork(game: Game): Promise<Buffer> {
@@ -227,6 +278,7 @@ export class GameLauncher {
     ++this.transferId
     this.visible = false
     if (this.hideTimer) clearTimeout(this.hideTimer)
+    if (this.artworkTimer) clearTimeout(this.artworkTimer)
     this.getPort()?.sendPacket(PacketType.SCREEN_HOME)
   }
 }

@@ -1039,6 +1039,10 @@ async function installDefaultGameLauncherCue() {
 // Handler function, declared here
 async function addKnownDevice(fp: MakeShiftPortFingerprint) {
   knownDeviceFingerprints.push(fp)
+  Ports[fp.deviceSerial].on(DeviceEvents.SERIAL.MESSAGE, (message: string) => {
+    void gameLauncher.handleDeviceMessage(message)
+  })
+  gameLauncher.syncToDevice(Ports[fp.deviceSerial])
   DeviceEvents.BUTTON.forEach((evObj) => {
     Ports[fp.deviceSerial].on(evObj.PRESSED, runCue)
     Ports[fp.deviceSerial].on(evObj.RELEASED, runCue)

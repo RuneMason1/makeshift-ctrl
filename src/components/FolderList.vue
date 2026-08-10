@@ -4,7 +4,6 @@ import Icon from './Icon.vue'
 import expandedIconUrl from '../assets/icon/bootstrap/chevron-down.svg?url'
 import collapsedIconUrl from '../assets/icon/bootstrap/chevron-right.svg?url'
 import { ref, watch } from 'vue';
-import { stat } from 'fs';
 import { Folder } from '../main';
 import { Cue } from '../../types/electron/main/cues';
 
@@ -15,7 +14,7 @@ const props = defineProps<{
 }>()
 
 const state = ref({
-  icon: collapsedIconUrl,
+  icon: props.collapseState ? collapsedIconUrl : expandedIconUrl,
   collapsed: props.collapseState,
   display: props.collapseState ? 'none' : 'inherit',
   classes: ['file-list']
@@ -39,11 +38,11 @@ function sendLoadEvent(file: Cue) {
 
 watch(() => state.value.collapsed, (collapsed) => {
   if (collapsed) {
-    state.value.display = 'inherit'
-    state.value.icon = expandedIconUrl
-  } else {
     state.value.display = 'none'
     state.value.icon = collapsedIconUrl
+  } else {
+    state.value.display = 'inherit'
+    state.value.icon = expandedIconUrl
   }
 })
 // console.log(props.folder)
@@ -78,6 +77,7 @@ watch(() => state.value.collapsed, (collapsed) => {
 >
   <FolderList
     v-for="(subFolder) in props.folder.subFolders"
+    :key="subFolder.name"
     :folder="subFolder"
     :collapse-state="true"
   />
@@ -85,6 +85,7 @@ watch(() => state.value.collapsed, (collapsed) => {
     class="list-entry"
     @click="sendLoadEvent(file)"
     v-for="(file) in props.folder.files"
+    :key="file.id"
   >
     <div class="entry-name">
       {{ file.file }}

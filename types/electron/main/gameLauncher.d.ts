@@ -6,11 +6,17 @@ export declare class GameLauncher {
     private visible;
     private transferId;
     private hideTimer?;
+    private artworkTimer?;
     private artworkCache;
+    private showArtwork;
     constructor(getPort: () => MakeShiftPort | undefined);
     initialize(): Promise<void>;
-    handleEvent(eventName: string): Promise<boolean>;
+    setArtworkEnabled(enabled: boolean): void;
+    syncToDevice(port?: any): void;
+    handleDeviceMessage(message: string): Promise<void>;
+    handleEvent(eventName: string, showArtwork?: boolean): Promise<boolean>;
     private showSelectedGame;
+    private sendArtwork;
     private cachedArtwork;
     private prewarmArtworkCache;
     private resetHideTimer;

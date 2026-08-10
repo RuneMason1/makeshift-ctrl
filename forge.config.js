@@ -1,5 +1,6 @@
 const pkg = require('./package.json');
 let appVersion = pkg.version;
+const packageOut = process.env.MAKESHIFT_PACKAGE_OUT || 'out';
 
 switch (process.env.BUILD_TYPE) {
   case 'production':
@@ -18,8 +19,9 @@ switch (process.env.BUILD_TYPE) {
 
 
 module.exports = {
-  outDir: process.env.MAKESHIFT_PACKAGE_OUT || 'out',
+  outDir: packageOut,
   packagerConfig: {
+    out: packageOut,
     asar: true,
     junk: true,
     icon: './forge/icons/makeshift-ctrl.ico',
@@ -40,6 +42,7 @@ module.exports = {
       /^\/\.nvmrc.*/,
 
       // folders
+      /^\/out(?:[.\-].*)?(?:\/.*)?$/,
       /^\/data.*/,
       /^\/examples.*/,
       /^\/public.*/,
