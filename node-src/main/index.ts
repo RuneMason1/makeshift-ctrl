@@ -14,6 +14,7 @@
 import { release, type } from 'node:os'
 import { readdirSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
+import { spawn } from 'node:child_process'
 import { dirname, extname, join, resolve, basename, normalize, sep as pathSep } from 'node:path'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmdirSync, rmSync } from 'original-fs'
 import { ensureDir, copyFile, ensureDirSync } from 'fs-extra'
@@ -36,6 +37,7 @@ import {
   // functions
   getPortFingerPrintSnapShot,
   startAutoScan,
+  stopAutoScan,
   setLogLevel,
   setPortAuthorityLogLevel,
   // types
@@ -115,10 +117,28 @@ let mainWindow: Maybe<BrowserWindow> = Nothing
 let splashWindow: Maybe<BrowserWindow> = Nothing
 let tray: Tray | null = null
 let menu: Menu | null = null
+let serialPaused = false
+let firmwareUpdateInProgress = false
 
 const store = new Store.default()
 
 process.env.APP_VERSION = app.getVersion()
+
+function restoreAndFocusMainWindow() {
+  mainWindow.ifJust((mw) => {
+    if (mw.isMinimized()) {
+      mw.restore()
+    }
+    if (mw.isVisible() === false) {
+      mw.show()
+    }
+    mw.focus()
+  })
+}
+
+app.on('second-instance', () => {
+  restoreAndFocusMainWindow()
+})
 
 
 
@@ -156,6 +176,183 @@ const layout: Layout = {
 }
 
 let currentLayer = 0
+
+function getOpenPorts(): MakeShiftPort[] {
+  return knownDeviceFingerprints
+    .map((device) => Ports[device.deviceSerial])
+    .filter((port): port is MakeShiftPort => typeof port !== 'undefined')
+}
+
+async function pauseCtrlSerial() {
+  if (serialPaused) {
+    return { paused: true, openPorts: getOpenPorts().length }
+  }
+
+  stopAutoScan()
+  const openPorts = getOpenPorts()
+  await Promise.all(openPorts.map((port) => Promise.resolve(port.close())))
+  serialPaused = true
+  return { paused: true, openPorts: openPorts.length }
+}
+
+async function resumeCtrlSerial() {
+  if (!serialPaused) {
+    return { paused: false }
+  }
+
+  startAutoScan()
+  serialPaused = false
+  return { paused: false }
+}
+
+function resolveFirmwareRepoPath() {
+  const candidates = [
+    process.env.MAKESHIFT_FIRMWARE_REPO,
+    resolve(process.env.APPROOT, '..', 'makeshift-firmware'),
+    resolve(process.env.APPROOT, '..', '..', 'makeshift-firmware'),
+    resolve(process.cwd(), '..', 'makeshift-firmware'),
+  ].filter((candidate): candidate is string => typeof candidate === 'string' && candidate.length > 0)
+
+  return candidates.find((candidate) => existsSync(join(candidate, 'platformio.ini')))
+}
+
+function resolvePlatformioExecutable() {
+  const userData = app.getPath('home')
+  const candidates = [
+    process.env.MAKESHIFT_PLATFORMIO,
+    join(userData, 'AppData', 'Roaming', 'Python', 'Python312', 'Scripts', 'platformio.exe'),
+    'platformio.exe',
+  ].filter((candidate): candidate is string => typeof candidate === 'string' && candidate.length > 0)
+
+  return candidates.find((candidate) => candidate.endsWith('.exe') === false || existsSync(candidate))
+}
+
+async function uploadFirmwareFromCtrl() {
+  if (firmwareUpdateInProgress) {
+    return { ok: false, reason: 'busy' }
+  }
+
+  const firmwareRepo = resolveFirmwareRepoPath()
+  if (typeof firmwareRepo === 'undefined') {
+    await dialog.showMessageBox({
+      type: 'error',
+      title: 'Firmware Update',
+      message: 'Could not find the makeshift-firmware repository.',
+      detail: 'Set MAKESHIFT_FIRMWARE_REPO or keep makeshift-firmware beside makeshift-ctrl.',
+    })
+    return { ok: false, reason: 'missing-firmware-repo' }
+  }
+
+  const platformioExecutable = resolvePlatformioExecutable()
+  if (typeof platformioExecutable === 'undefined') {
+    await dialog.showMessageBox({
+      type: 'error',
+      title: 'Firmware Update',
+      message: 'Could not find PlatformIO.',
+      detail: 'Set MAKESHIFT_PLATFORMIO or install PlatformIO for the current Windows user.',
+    })
+    return { ok: false, reason: 'missing-platformio' }
+  }
+
+  firmwareUpdateInProgress = true
+  rebuildTrayMenu()
+  try {
+    await pauseCtrlSerial()
+    const uploadResult = await new Promise<{ code: number | null, stdout: string, stderr: string }>((resolveUpload) => {
+      const child = spawn(platformioExecutable, ['run', '-t', 'upload'], {
+        cwd: firmwareRepo,
+        windowsHide: true,
+      })
+
+      let stdout = ''
+      let stderr = ''
+
+      child.stdout?.on('data', (chunk) => {
+        stdout += chunk.toString()
+      })
+      child.stderr?.on('data', (chunk) => {
+        stderr += chunk.toString()
+      })
+      child.on('close', (code) => {
+        resolveUpload({ code, stdout, stderr })
+      })
+    })
+
+    if (uploadResult.code === 0) {
+      await dialog.showMessageBox({
+        type: 'info',
+        title: 'Firmware Update',
+        message: 'Firmware upload finished.',
+      })
+      return { ok: true, ...uploadResult }
+    }
+
+    await dialog.showMessageBox({
+      type: 'error',
+      title: 'Firmware Update Failed',
+      message: 'PlatformIO upload did not finish successfully.',
+      detail: uploadResult.stderr || uploadResult.stdout || 'No upload output was captured.',
+    })
+    return { ok: false, ...uploadResult }
+  } finally {
+    await resumeCtrlSerial()
+    firmwareUpdateInProgress = false
+    rebuildTrayMenu()
+  }
+}
+
+function rebuildTrayMenu() {
+  if (tray === null) {
+    return
+  }
+
+  menu = Menu.buildFromTemplate([
+    {
+      label: 'Open MakeShift Ctrl',
+      click: restoreAndFocusMainWindow,
+    },
+    {
+      label: serialPaused ? 'Resume MakeShift Control' : 'Pause MakeShift Control',
+      enabled: firmwareUpdateInProgress === false,
+      click: async () => {
+        if (serialPaused) {
+          await resumeCtrlSerial()
+        } else {
+          await pauseCtrlSerial()
+        }
+        rebuildTrayMenu()
+      },
+    },
+    {
+      label: firmwareUpdateInProgress ? 'Updating Firmware...' : 'Update Firmware',
+      enabled: firmwareUpdateInProgress === false,
+      click: async () => {
+        await uploadFirmwareFromCtrl()
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit',
+      click: () => {
+        app.quit()
+      },
+    },
+  ])
+
+  tray.setToolTip(serialPaused ? 'MakeShift Ctrl (paused)' : 'MakeShift Ctrl')
+  tray.setContextMenu(menu)
+}
+
+function createTray() {
+  if (tray !== null) {
+    rebuildTrayMenu()
+    return
+  }
+
+  tray = new Tray(join(process.env.ASSETS, 'icon', 'iconbright_24.png'))
+  tray.on('click', restoreAndFocusMainWindow)
+  rebuildTrayMenu()
+}
 
 
 
@@ -427,6 +624,17 @@ const ipcMainCallHandler = {
       log.error(e)
     }
   },
+  pauseCtrlSerial: async () => {
+    const state = await pauseCtrlSerial()
+    rebuildTrayMenu()
+    return state
+  },
+  resumeCtrlSerial: async () => {
+    const state = await resumeCtrlSerial()
+    rebuildTrayMenu()
+    return state
+  },
+  uploadFirmware: async () => uploadFirmwareFromCtrl(),
   fetchBlocklyToolbox: async () => {
     syncGroupsWithToolbox()
   },
@@ -703,6 +911,7 @@ async function createMainWindow() {
   })
 
   mainWindow = Just(mw)
+  createTray()
 
   // This loads the index and chains into src/main.ts
   if (app.isPackaged) {

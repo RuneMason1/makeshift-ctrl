@@ -33,6 +33,23 @@ declare const ipcMainCallHandler: {
         cueId: CueId;
         contents: Uint8Array;
     }) => Promise<void>;
+    pauseCtrlSerial: () => Promise<{
+        paused: boolean;
+        openPorts: number;
+    }>;
+    resumeCtrlSerial: () => Promise<{
+        paused: boolean;
+    }>;
+    uploadFirmware: () => Promise<{
+        ok: boolean;
+        reason: string;
+    } | {
+        code: number | null;
+        stdout: string;
+        stderr: string;
+        ok: boolean;
+        reason?: undefined;
+    }>;
     fetchBlocklyToolbox: () => Promise<void>;
     fetchBlocklyBlocks: () => Promise<void>;
     fetchBlocklyDefaultWorkspace: () => Promise<void>;

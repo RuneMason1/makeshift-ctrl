@@ -3,6 +3,9 @@ export declare const ctrlIpcApi: {
     call: {
         openCueFolder: string;
         runCue: string;
+        pauseCtrlSerial: string;
+        resumeCtrlSerial: string;
+        uploadFirmware: string;
         fetchBlocklyToolbox: string;
         fetchBlocklyBlocks: string;
         fetchBlocklyDefaultWorkspace: string;

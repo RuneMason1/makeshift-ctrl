@@ -3,6 +3,9 @@ export const ctrlIpcApi = {
   call: {
     openCueFolder: 'shell-openCueFolder',
     runCue: 'mkshft-runCue',
+    pauseCtrlSerial: 'mkshft-pause-ctrl-serial',
+    resumeCtrlSerial: 'mkshft-resume-ctrl-serial',
+    uploadFirmware: 'mkshft-upload-firmware',
     fetchBlocklyToolbox: 'blockly-fetch-toolbox',
     fetchBlocklyBlocks: 'blockly-fetch-blocks',
     fetchBlocklyDefaultWorkspace: 'blockly-fetch-defaultWorkspace',
