@@ -15,6 +15,9 @@ export interface CueModule extends IModule {
     suspicions: any;
     id: CueId;
     requiredPlugins?: string[];
+    requiredAssets?: string[];
+    requiredComponents?: string[];
+    requiredProviders?: string[];
     plugins?: any;
     setup: Function;
     run: (eventData?: any) => void;

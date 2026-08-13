@@ -6,7 +6,7 @@ import App from './App.vue'
 import { Size } from 'types/electron/main'
 import { SimplePopup } from './composables/popup'
 import { Maybe, Nothing } from 'purify-ts'
-import { View } from './renderer'
+import { View, VisualPreferences } from './renderer'
 export type SensorEventDetails = {
   sensorId: number,
   sensorType: string,
@@ -46,6 +46,7 @@ const cueRoot: Folder = {
     selectedEvent: ref('sensor-0-dial-increment'),
     selectedEventCues: ref(undefined) as Ref<CueId | undefined>,
     selectedView: ref('blockly') as Ref<View>,
+    visualPreferences: ref(await window.MakeShiftCtrl.get.visualPreferences()) as Ref<VisualPreferences>,
     logRank: await window.MakeShiftCtrl.get.logRank(),
     clientSize: ref(await window.MakeShiftCtrl.get.clientSize()) as Ref<Size>,
     activePopups: ref<SimplePopup[]>([]),
@@ -152,6 +153,7 @@ const cueRoot: Folder = {
     .provide('selected-event', state.selectedEvent)
     .provide('selected-event-cues', state.selectedEventCues)
     .provide('selected-view', state.selectedView)
+    .provide('visual-preferences', state.visualPreferences)
     .provide('current-device', state.currentDevice)
     .provide('popups', state.activePopups)
     .provide('terminal-active', state.terminalActive)

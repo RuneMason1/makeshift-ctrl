@@ -27,6 +27,7 @@ export declare const ctrlIpcApi: {
         cueById: string;
         cueByFolder: string;
         currentView: string;
+        visualPreferences: string;
         defaultTheme: string;
         themeFromPath: string;
     };
@@ -34,6 +35,7 @@ export declare const ctrlIpcApi: {
         cueFile: string;
         cueForEvent: string;
         currentView: string;
+        visualPreferences: string;
         serialWorkspaceAsCue: string;
     };
     delete: {
@@ -69,6 +71,13 @@ export declare const storeKeys: {
     MainWindowState: string;
     DeviceLayout: string;
     CurrentView: string;
+    VisualPreferences: string;
+};
+export type VisualPreferences = {
+    splashImageId: number;
+    ledColor: string;
+    usbConnectedColor: string;
+    usbDisconnectedColor: string;
 };
 export type CtrlIpcApi = typeof ctrlIpcApi;
 export type StoreKeys = typeof storeKeys;

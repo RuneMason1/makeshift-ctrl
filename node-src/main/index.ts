@@ -31,6 +31,7 @@ import {
   SerialEvents,
   HardwareDescriptors,
   PortAuthorityEvents,
+  PacketType,
   // emitter objects
   Ports,
   PortAuthority,
@@ -57,7 +58,7 @@ import {
 import { Maybe, Just, Nothing } from 'purify-ts/Maybe'
 
 // makeshift ctrl imports
-import { ctrlIpcApi, storeKeys } from '../ipcApi'
+import { ctrlIpcApi, storeKeys, VisualPreferences } from '../ipcApi'
 import {
   initBlockly,
   syncGroupsWithToolbox,
@@ -82,7 +83,9 @@ import { plugins, initPlugins, installPlugin, killPluginHost } from './plugins'
 import { DefaultTheme, Theme, loadTheme } from './themes'
 import { ctrlLogger } from './utils'
 import { Fileio } from './fileio'
-import { GameLauncher } from './gameLauncher'
+import { DeviceRuntimeManifest } from './deviceRuntime'
+import { CollectionProviderRegistry } from './collectionProviderRegistry'
+import { collectionProviderCatalog } from './collectionProviderCatalog'
 
 
 let nanoid
@@ -108,11 +111,30 @@ if (process.platform === 'win32') {
 // initializing all independent globals
 let attachedDeviceFingerprints: MakeShiftPortFingerprint[] = []
 let knownDeviceFingerprints: MakeShiftPortFingerprint[] = [];
-const gameLauncher = new GameLauncher(() => {
+const deviceRuntime = new DeviceRuntimeManifest()
+const collectionProviders = new CollectionProviderRegistry()
+const collectionProviderContext = { getPort: () => {
   const device = knownDeviceFingerprints[0]
   return device ? Ports[device.deviceSerial] : undefined
-});
-(plugins as any).gameLauncher = gameLauncher
+} }
+for (const definition of collectionProviderCatalog) {
+  collectionProviders.register(definition.id, () => definition.create(collectionProviderContext))
+}
+Object.assign(plugins, {
+  collectionProviders,
+  // Existing user cues can migrate independently from the old plugin name.
+  gameLauncher: {
+    initialize: () => collectionProviders.get('steam').initialize(),
+    setArtworkEnabled: (enabled: boolean) =>
+      collectionProviders.get('steam').setArtworkEnabled(enabled),
+    syncToDevice: (port?: MakeShiftPort) =>
+      collectionProviders.get('steam').syncToDevice(port),
+    handleDeviceMessage: (message: string) =>
+      collectionProviders.get('steam').handleDeviceMessage(message),
+    handleEvent: (eventName: string, showArtwork = true) =>
+      collectionProviders.get('steam').handleEvent(eventName, showArtwork),
+  },
+})
 let mainWindow: Maybe<BrowserWindow> = Nothing
 let splashWindow: Maybe<BrowserWindow> = Nothing
 let tray: Tray | null = null
@@ -121,6 +143,68 @@ let serialPaused = false
 let firmwareUpdateInProgress = false
 
 const store = new Store.default()
+const defaultVisualPreferences: VisualPreferences = {
+  splashImageId: 0,
+  ledColor: '#d83a04',
+  usbConnectedColor: '#d83a04',
+  usbDisconnectedColor: '#481808',
+}
+
+function normalizeHexColor(value: string, fallback: string): string {
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  return /^#[0-9a-f]{6}$/.test(normalized) ? normalized : fallback
+}
+
+function getVisualPreferences(): VisualPreferences {
+  const stored = store.get(storeKeys.VisualPreferences, defaultVisualPreferences) as Partial<VisualPreferences>
+  return {
+    splashImageId: [0, 1, 2].includes(Number(stored?.splashImageId)) ? Number(stored.splashImageId) : defaultVisualPreferences.splashImageId,
+    ledColor: normalizeHexColor(stored?.ledColor ?? '', defaultVisualPreferences.ledColor),
+    usbConnectedColor: normalizeHexColor(stored?.usbConnectedColor ?? '', defaultVisualPreferences.usbConnectedColor),
+    usbDisconnectedColor: normalizeHexColor(stored?.usbDisconnectedColor ?? '', defaultVisualPreferences.usbDisconnectedColor),
+  }
+}
+
+function saveVisualPreferences(partial: Partial<VisualPreferences>): VisualPreferences {
+  const merged = {
+    ...getVisualPreferences(),
+    ...partial,
+  }
+  const normalized: VisualPreferences = {
+    splashImageId: [0, 1, 2].includes(Number(merged.splashImageId)) ? Number(merged.splashImageId) : defaultVisualPreferences.splashImageId,
+    ledColor: normalizeHexColor(merged.ledColor, defaultVisualPreferences.ledColor),
+    usbConnectedColor: normalizeHexColor(merged.usbConnectedColor, defaultVisualPreferences.usbConnectedColor),
+    usbDisconnectedColor: normalizeHexColor(merged.usbDisconnectedColor, defaultVisualPreferences.usbDisconnectedColor),
+  }
+  store.set(storeKeys.VisualPreferences, normalized)
+  return normalized
+}
+
+function hexToRgbBytes(hex: string): number[] {
+  const normalized = normalizeHexColor(hex, '#000000')
+  return [
+    parseInt(normalized.slice(1, 3), 16),
+    parseInt(normalized.slice(3, 5), 16),
+    parseInt(normalized.slice(5, 7), 16),
+  ]
+}
+
+function pushVisualPreferencesToPort(port: MakeShiftPort, prefs = getVisualPreferences()): boolean {
+  const body = Buffer.from([
+    1,
+    prefs.splashImageId,
+    ...hexToRgbBytes(prefs.ledColor),
+    ...hexToRgbBytes(prefs.usbConnectedColor),
+    ...hexToRgbBytes(prefs.usbDisconnectedColor),
+  ])
+  return port.sendPacket(PacketType.DEVICE_VISUALS, body)
+}
+
+function syncVisualPreferencesToConnectedDevices(prefs = getVisualPreferences()): void {
+  for (const port of getOpenPorts()) {
+    pushVisualPreferencesToPort(port, prefs)
+  }
+}
 
 process.env.APP_VERSION = app.getVersion()
 
@@ -546,7 +630,7 @@ app.whenReady()
     attachCueWatchers()
     await initLayouts()
     await installDefaultGameLauncherCue()
-    await gameLauncher.initialize()
+    await collectionProviders.initialize()
     log.debug('Loaded Cues:')
     cues.forEach((val, key) => {
       log.debug(`${key}: ${nspect(val, 1)}`)
@@ -689,6 +773,9 @@ const ipcMainGetHandler = {
   currentView: async (): Promise<string> => {
     return store.get(storeKeys.CurrentView, 'blockly') as string
   },
+  visualPreferences: async (): Promise<VisualPreferences> => {
+    return getVisualPreferences()
+  },
   blocklyToolbox: async (): Promise<any> => {
     return 'toaster'
   },
@@ -748,6 +835,11 @@ const ipcMainSetHandler = {
   cueFile: saveCueFile,
   currentView: async (view: string) => {
     store.set(storeKeys.CurrentView, view)
+  },
+  visualPreferences: async (prefs: Partial<VisualPreferences>) => {
+    const saved = saveVisualPreferences(prefs)
+    syncVisualPreferencesToConnectedDevices(saved)
+    return saved
   },
   blocklyWorkspaceForEvent: async (data: {
     workspaceName: string,
@@ -1048,6 +1140,8 @@ export async function detachCueFromEvent({ layerName, event, cueId }:
       const mappedCue = layout.layers[targetLayer].get(event)
       log.debug(`existing cue: ${nspct2(mappedCue)}`)
       layout.layers[targetLayer].delete(event)
+      await saveLayouts()
+      refreshDeviceRuntimeRequirements()
     }
   }
 }
@@ -1093,7 +1187,8 @@ export async function attachCueToEvent({ layerName, event, cueId }:
 
     loadedCueModules[cueId].runTriggers[deviceId].events.push(event)
 
-    saveLayouts()
+    await saveLayouts()
+    refreshDeviceRuntimeRequirements()
 
     log.info(`Cue ${cueId} set to run for event: ${event}`)
   } catch (e) {
@@ -1217,6 +1312,7 @@ async function loadLayouts() {
 
   layout.layers = tempLayout.layers
   layout.layerLabels = tempLayout.layerLabels
+  refreshDeviceRuntimeRequirements(false)
 
   // log.debug(nspect(savedLayout, 4))
   // log.debug(nspct2(tempLayout))
@@ -1245,13 +1341,42 @@ async function installDefaultGameLauncherCue() {
   if (changed) await saveLayouts()
 }
 
+function refreshDeviceRuntimeRequirements(syncConnectedDevices = true): void {
+  const requiredAssets = new Set<string>()
+  const requiredComponents = new Set<string>()
+  for (const layer of layout.layers) {
+    for (const cue of layer.values()) {
+      const assets = loadedCueModules[cue.id]?.requiredAssets
+      if (Array.isArray(assets)) {
+        for (const asset of assets) {
+          if (typeof asset === 'string') requiredAssets.add(asset)
+        }
+      }
+      const components = loadedCueModules[cue.id]?.requiredComponents
+      if (Array.isArray(components)) {
+        for (const component of components) {
+          if (typeof component === 'string') requiredComponents.add(component)
+        }
+      }
+    }
+  }
+  deviceRuntime.setRequiredComponents(requiredComponents)
+  deviceRuntime.setRequiredAssets(requiredAssets)
+  if (syncConnectedDevices) {
+    for (const port of getOpenPorts()) deviceRuntime.sync(port)
+  }
+}
+
 // Handler function, declared here
 async function addKnownDevice(fp: MakeShiftPortFingerprint) {
   knownDeviceFingerprints.push(fp)
   Ports[fp.deviceSerial].on(DeviceEvents.SERIAL.MESSAGE, (message: string) => {
-    void gameLauncher.handleDeviceMessage(message)
+    void collectionProviders.handleDeviceMessage(message)
   })
-  gameLauncher.syncToDevice(Ports[fp.deviceSerial])
+  pushVisualPreferencesToPort(Ports[fp.deviceSerial])
+  refreshDeviceRuntimeRequirements(false)
+  deviceRuntime.sync(Ports[fp.deviceSerial])
+  collectionProviders.syncToDevice(Ports[fp.deviceSerial])
   DeviceEvents.BUTTON.forEach((evObj) => {
     Ports[fp.deviceSerial].on(evObj.PRESSED, runCue)
     Ports[fp.deviceSerial].on(evObj.RELEASED, runCue)

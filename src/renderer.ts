@@ -14,6 +14,12 @@ type DeviceEvHandler = (callback: (fp: MakeShiftPortFingerprint) => void) => () 
 type TerminalEvHandler = (callback: (fp: LogMessage) => void) => () => void
 
 export type View = 'blockly' | 'code'
+export type VisualPreferences = {
+  splashImageId: number,
+  ledColor: string,
+  usbConnectedColor: string,
+  usbDisconnectedColor: string,
+}
 
 export const ViewList: View[] = ['blockly', 'code']
 

@@ -6,6 +6,12 @@ type CueEvHandler = (callback: (cue: Cue) => void) => () => void;
 type DeviceEvHandler = (callback: (fp: MakeShiftPortFingerprint) => void) => () => void;
 type TerminalEvHandler = (callback: (fp: LogMessage) => void) => () => void;
 export type View = 'blockly' | 'code';
+export type VisualPreferences = {
+    splashImageId: number;
+    ledColor: string;
+    usbConnectedColor: string;
+    usbDisconnectedColor: string;
+};
 export declare const ViewList: View[];
 export interface rndrCtrlAPI {
     test: (val: any) => void;

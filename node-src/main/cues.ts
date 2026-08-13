@@ -36,6 +36,9 @@ export interface CueModule extends IModule {
   suspicions: any,
   id: CueId,
   requiredPlugins?: string[],
+  requiredAssets?: string[],
+  requiredComponents?: string[],
+  requiredProviders?: string[],
   plugins?: any,
   setup: Function,
   run: (eventData?: any) => void,
@@ -195,6 +198,14 @@ export async function importCueModule(cue: Cue): Promise<Cue> {
           loadedCueModules[id].plugins[pluginName] = plugins[pluginName]
         }
       })
+    }
+    if (Array.isArray(loadedCueModules[id].requiredProviders)) {
+      const providerRegistry = loadedCueModules[id].plugins.collectionProviders
+      for (const providerId of loadedCueModules[id].requiredProviders) {
+        if (!providerRegistry?.has(providerId)) {
+          throw new Error(`Cue requires unknown collection provider: ${providerId}`)
+        }
+      }
     }
     loadedCueModules[id].plugins.msg = new Msg({
       host: 'cue:' + id,

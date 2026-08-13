@@ -2,7 +2,7 @@
 import { ref, computed, inject, watch, onMounted, Ref } from 'vue';
 import { MakeShiftDeviceEvents, MakeShiftPortFingerprint, MakeShiftSerialEvents } from '@eos-makeshift/serial'
 import { LogLevel } from '@eos-makeshift/msg';
-import { View, ViewList } from '../renderer';
+import { View, ViewList, VisualPreferences } from '../renderer';
 import termOpenIcon from '../assets/icon/bootstrap/terminal.svg?url'
 import termCloseIcon from '../assets/icon/bootstrap/terminal-fill.svg?url'
 import codeViewIcon from '../assets/icon/bootstrap/code-square.svg?url'
@@ -17,6 +17,13 @@ const currentDevice = inject('current-device') as Ref<MakeShiftPortFingerprint>
 const selectedEvent = inject('selected-event') as Ref<string>
 const terminalActive = inject('terminal-active') as Ref<boolean>
 const selectedView = inject('selected-view') as Ref<View>
+const visualPreferences = inject('visual-preferences') as Ref<VisualPreferences>
+const prefsOpen = ref(false)
+const splashOptions = [
+  { value: 0, label: 'Current Default' },
+  { value: 1, label: 'MakeShift Logo' },
+  { value: 2, label: 'EOS Jackal' },
+]
 
 const viewIcons = {
   'blockly': blocklyViewIcon,
@@ -53,6 +60,16 @@ function toggleTerm() {
   terminalActive.value = !terminalActive.value
 }
 
+async function updateVisualPreference<K extends keyof VisualPreferences>(key: K, value: VisualPreferences[K]) {
+  visualPreferences.value = {
+    ...visualPreferences.value,
+    [key]: value,
+  }
+  visualPreferences.value = await window.MakeShiftCtrl.set.visualPreferences({
+    [key]: value,
+  })
+}
+
 onMounted(() => {
   if (typeof currentDevice.value.deviceSerial === 'undefined' && connectedDevices.value.length > 0) {
     currentDevice.value = connectedDevices.value[0]
@@ -77,6 +94,55 @@ onMounted(() => {
       'gap-3',
     ]"
   >
+    <div
+      v-if="prefsOpen"
+      class="prefs-panel"
+    >
+      <div class="prefs-title">Device Visual Preferences</div>
+
+      <label class="prefs-row">
+        <span>Home splash</span>
+        <select
+          :value="visualPreferences.splashImageId"
+          @change="updateVisualPreference('splashImageId', Number(($event.target as HTMLSelectElement).value))"
+        >
+          <option
+            v-for="option in splashOptions"
+            :key="option.value"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </option>
+        </select>
+      </label>
+
+      <label class="prefs-row">
+        <span>LED color</span>
+        <input
+          type="color"
+          :value="visualPreferences.ledColor"
+          @input="updateVisualPreference('ledColor', ($event.target as HTMLInputElement).value)"
+        />
+      </label>
+
+      <label class="prefs-row">
+        <span>USB connected</span>
+        <input
+          type="color"
+          :value="visualPreferences.usbConnectedColor"
+          @input="updateVisualPreference('usbConnectedColor', ($event.target as HTMLInputElement).value)"
+        />
+      </label>
+
+      <label class="prefs-row">
+        <span>USB idle</span>
+        <input
+          type="color"
+          :value="visualPreferences.usbDisconnectedColor"
+          @input="updateVisualPreference('usbDisconnectedColor', ($event.target as HTMLInputElement).value)"
+        />
+      </label>
+    </div>
 
     <!-- conncted-devices text div -->
     <div :class="[
@@ -161,6 +227,16 @@ onMounted(() => {
     >
       {{ terminalActive ? 'Close' : 'Open' }} Terminal
     </TextButton>
+    <TextButton
+      color="var(--color-bg)"
+      hover-color="var(--color-text)"
+      :class="[
+        'ml-2'
+      ]"
+      @click="prefsOpen = !prefsOpen"
+    >
+      {{ prefsOpen ? 'Close' : 'Open' }} Preferences
+    </TextButton>
     <!-- Current Targeted Event status -->
     <!-- <div :class="['mr-3']">
     {{ selectedEvent }}
@@ -202,5 +278,38 @@ input[type="radio"]+svg {
   color: rgb(var(--color-text));
   background-color: rgb(var(--color-bg));
   border-radius: 3px;
+}
+
+.prefs-panel {
+  position: absolute;
+  right: 12px;
+  bottom: 74px;
+  min-width: 240px;
+  padding: 12px;
+  border-radius: 6px;
+  background-color: rgb(var(--color-bg));
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 20;
+}
+
+.prefs-title {
+  font-family: 'Iosevka Makeshift';
+  font-size: 11pt;
+}
+
+.prefs-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.prefs-row span,
+.prefs-row select,
+.prefs-row input {
+  color: rgb(var(--color-text));
 }
 </style>

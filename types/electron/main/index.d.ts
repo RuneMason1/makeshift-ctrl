@@ -2,6 +2,7 @@ import { BrowserWindow } from 'electron';
 import { Block } from 'blockly';
 import { MakeShiftDeviceEvents, MakeShiftSerialEvents } from '@eos-makeshift/serial';
 import { Maybe } from 'purify-ts/Maybe';
+import { VisualPreferences } from '../ipcApi';
 import { saveCueFile, Cue, CueId, CueMap } from './cues';
 import { Theme } from './themes';
 export type DeviceId = string;
@@ -72,6 +73,7 @@ declare const ipcMainGetHandler: {
     cueByFolder: (folder: any) => Promise<CueMap>;
     clientSize: () => Promise<Size>;
     currentView: () => Promise<string>;
+    visualPreferences: () => Promise<VisualPreferences>;
     blocklyToolbox: () => Promise<any>;
     allBlocklySerialWorkspaceNames: () => Promise<string[]>;
     blocklySerialWorkspace: (workspaceKey: any) => Promise<any>;
@@ -89,6 +91,7 @@ declare const ipcMainSetHandler: {
     serialWorkspaceAsCue: (serialWorkspace: any) => Promise<Cue>;
     cueFile: typeof saveCueFile;
     currentView: (view: string) => Promise<void>;
+    visualPreferences: (prefs: Partial<VisualPreferences>) => Promise<VisualPreferences>;
     blocklyWorkspaceForEvent: (data: {
         workspaceName: string;
         event: string;

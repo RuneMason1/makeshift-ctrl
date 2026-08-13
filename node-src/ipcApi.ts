@@ -27,6 +27,7 @@ export const ctrlIpcApi = {
     cueById: 'cue-get-byId',
     cueByFolder: 'cue-get-byFolder',
     currentView: 'mkshft-get-currentView',
+    visualPreferences: 'mkshft-get-visualPreferences',
     defaultTheme: 'theme-get-default',
     themeFromPath: 'theme-get-fromPath',
   },
@@ -34,6 +35,7 @@ export const ctrlIpcApi = {
     cueFile: 'mkshft-set-cueFile',
     cueForEvent: 'mkshft-set-cueForEvent',
     currentView: 'mkshft-set-currentView',
+    visualPreferences: 'mkshft-set-visualPreferences',
     serialWorkspaceAsCue: 'mkshft-set-serialWorkspaceAsCue',
   },
   delete: {
@@ -71,6 +73,14 @@ export const storeKeys = {
   MainWindowState: 'mainWindowState',
   DeviceLayout: 'deviceLayout',
   CurrentView: 'currentView',
+  VisualPreferences: 'visualPreferences',
+}
+
+export type VisualPreferences = {
+  splashImageId: number,
+  ledColor: string,
+  usbConnectedColor: string,
+  usbDisconnectedColor: string,
 }
 
 export type CtrlIpcApi = typeof ctrlIpcApi
