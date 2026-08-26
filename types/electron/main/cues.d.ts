@@ -16,8 +16,17 @@ export interface CueModule extends IModule {
     id: CueId;
     requiredPlugins?: string[];
     requiredAssets?: string[];
+    runtimeAssets?: Array<{
+        name: string;
+        id: number;
+        format: number;
+        width: number;
+        height: number;
+        data: Buffer;
+    }>;
     requiredComponents?: string[];
     requiredProviders?: string[];
+    glyph?: string;
     plugins?: any;
     setup: Function;
     run: (eventData?: any) => void;

@@ -6,6 +6,8 @@ export type RuntimeAsset = {
   data: Buffer
 }
 
+export type NamedRuntimeAsset = RuntimeAsset & { name: string }
+
 const ASSET_PRESETS = new Map<string, string[]>([
   ['preset.common-glyphs', [
     'media.previous',
@@ -122,7 +124,8 @@ const assets = new Map<string, RuntimeAsset>([
   }],
 ])
 
-export function resolveRuntimeAssets(names: Iterable<string>): RuntimeAsset[] {
+export function resolveRuntimeAssets(names: Iterable<string>,
+  cueAssets: Iterable<NamedRuntimeAsset> = []): RuntimeAsset[] {
   const resolved = new Map<number, RuntimeAsset>()
   for (const name of names) {
     const preset = ASSET_PRESETS.get(name)
@@ -136,5 +139,7 @@ export function resolveRuntimeAssets(names: Iterable<string>): RuntimeAsset[] {
     const asset = assets.get(name)
     if (asset) resolved.set(asset.id, asset)
   }
+  // Cue-bundled assets are authoritative over optional shared presets.
+  for (const asset of cueAssets) resolved.set(asset.id, asset)
   return [...resolved.values()]
 }

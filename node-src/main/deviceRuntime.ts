@@ -1,5 +1,5 @@
 import { MakeShiftPort, PacketType } from '@eos-makeshift/serial'
-import { resolveRuntimeAssets, RuntimeAsset } from './assetCatalog'
+import { NamedRuntimeAsset, resolveRuntimeAssets, RuntimeAsset } from './assetCatalog'
 
 export const RUNTIME_PROTOCOL_VERSION = 1
 
@@ -65,8 +65,8 @@ export class DeviceRuntimeManifest {
     this.components.delete(id)
   }
 
-  setRequiredAssets(names: Iterable<string>): void {
-    this.assets = resolveRuntimeAssets(names)
+  setRequiredAssets(names: Iterable<string>, cueAssets: Iterable<NamedRuntimeAsset> = []): void {
+    this.assets = resolveRuntimeAssets(names, cueAssets)
   }
 
   setRequiredComponents(names: Iterable<string>): void {

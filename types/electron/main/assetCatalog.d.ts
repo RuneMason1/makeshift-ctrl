@@ -5,4 +5,7 @@ export type RuntimeAsset = {
     height: number;
     data: Buffer;
 };
-export declare function resolveRuntimeAssets(names: Iterable<string>): RuntimeAsset[];
+export type NamedRuntimeAsset = RuntimeAsset & {
+    name: string;
+};
+export declare function resolveRuntimeAssets(names: Iterable<string>, cueAssets?: Iterable<NamedRuntimeAsset>): RuntimeAsset[];

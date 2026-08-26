@@ -1,4 +1,5 @@
 import { MakeShiftPort } from '@eos-makeshift/serial';
+import { NamedRuntimeAsset } from './assetCatalog';
 export declare const RUNTIME_PROTOCOL_VERSION = 1;
 export declare enum RuntimeComponentType {
     Carousel = 1,
@@ -47,7 +48,7 @@ export declare class DeviceRuntimeManifest {
     private assets;
     register(component: RuntimeComponent): void;
     unregister(id: number): void;
-    setRequiredAssets(names: Iterable<string>): void;
+    setRequiredAssets(names: Iterable<string>, cueAssets?: Iterable<NamedRuntimeAsset>): void;
     setRequiredComponents(names: Iterable<string>): void;
     sync(port: MakeShiftPort): boolean;
     private syncAssets;

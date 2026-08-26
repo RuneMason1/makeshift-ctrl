@@ -1343,10 +1343,12 @@ async function installDefaultGameLauncherCue() {
 
 function refreshDeviceRuntimeRequirements(syncConnectedDevices = true): void {
   const requiredAssets = new Set<string>()
+  const cueAssets: NonNullable<CueModule['runtimeAssets']> = []
   const requiredComponents = new Set<string>()
   for (const layer of layout.layers) {
     for (const cue of layer.values()) {
       const cueModule = loadedCueModules[cue.id]
+      if (Array.isArray(cueModule?.runtimeAssets)) cueAssets.push(...cueModule.runtimeAssets)
       const assets = cueModule?.requiredAssets
       if (Array.isArray(assets)) {
         for (const asset of assets) {
@@ -1367,7 +1369,7 @@ function refreshDeviceRuntimeRequirements(syncConnectedDevices = true): void {
     }
   }
   deviceRuntime.setRequiredComponents(requiredComponents)
-  deviceRuntime.setRequiredAssets(requiredAssets)
+  deviceRuntime.setRequiredAssets(requiredAssets, cueAssets)
   if (syncConnectedDevices) {
     for (const port of getOpenPorts()) deviceRuntime.sync(port)
   }
