@@ -51,6 +51,26 @@ function fillTriangle(set: (x: number, y: number) => void,
   }
 }
 
+function thickLine(set: (x: number, y: number) => void,
+  x0: number, y0: number, x1: number, y1: number, width = 3): void {
+  const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0))
+  for (let i = 0; i <= steps; ++i) {
+    const x = Math.round(x0 + (x1 - x0) * i / steps)
+    const y = Math.round(y0 + (y1 - y0) * i / steps)
+    const radius = Math.floor(width / 2)
+    fillRect(set, x - radius, y - radius, x + radius, y + radius)
+  }
+}
+
+function soundWave(set: (x: number, y: number) => void,
+  centerX: number, centerY: number, radius: number): void {
+  for (let y = -radius; y <= radius; ++y) {
+    const x = Math.round(Math.sqrt(radius * radius - y * y))
+    set(centerX + x, centerY + y)
+    set(centerX + x + 1, centerY + y)
+  }
+}
+
 const assets = new Map<string, RuntimeAsset>([
   ['media.previous', {
     id: 1, format: 1, width: SIZE, height: SIZE,
@@ -87,9 +107,8 @@ const assets = new Map<string, RuntimeAsset>([
     data: glyph((set) => {
       fillRect(set, 4, 10, 9, 22)
       fillTriangle(set, 10, 18, 16)
-      for (let y = 11; y <= 21; ++y) set(22, y)
-      for (let y = 8; y <= 24; ++y) set(27, y)
-      for (let i = 0; i <= 22; ++i) set(4 + i, 26 - i)
+      thickLine(set, 21, 11, 29, 21, 3)
+      thickLine(set, 29, 11, 21, 21, 3)
     }),
   }],
   ['media.unmute', {
@@ -97,8 +116,8 @@ const assets = new Map<string, RuntimeAsset>([
     data: glyph((set) => {
       fillRect(set, 4, 10, 9, 22)
       fillTriangle(set, 10, 18, 16)
-      for (let y = 11; y <= 21; ++y) set(22, y)
-      for (let y = 8; y <= 24; ++y) set(27, y)
+      soundWave(set, 16, 16, 7)
+      soundWave(set, 16, 16, 12)
     }),
   }],
 ])

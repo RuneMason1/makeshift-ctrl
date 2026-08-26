@@ -1346,13 +1346,19 @@ function refreshDeviceRuntimeRequirements(syncConnectedDevices = true): void {
   const requiredComponents = new Set<string>()
   for (const layer of layout.layers) {
     for (const cue of layer.values()) {
-      const assets = loadedCueModules[cue.id]?.requiredAssets
+      const cueModule = loadedCueModules[cue.id]
+      const assets = cueModule?.requiredAssets
       if (Array.isArray(assets)) {
         for (const asset of assets) {
           if (typeof asset === 'string') requiredAssets.add(asset)
         }
       }
-      const components = loadedCueModules[cue.id]?.requiredComponents
+      if (typeof cueModule?.glyph === 'string') {
+        const glyphName = cueModule.glyph.includes('.')
+          ? cueModule.glyph : `media.${cueModule.glyph}`
+        requiredAssets.add(glyphName)
+      }
+      const components = cueModule?.requiredComponents
       if (Array.isArray(components)) {
         for (const component of components) {
           if (typeof component === 'string') requiredComponents.add(component)

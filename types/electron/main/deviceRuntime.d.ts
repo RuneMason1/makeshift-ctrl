@@ -15,18 +15,22 @@ export declare const RuntimeComponentAlias: {
     readonly InfoPanel: RuntimeComponentType.StatusCard;
 };
 export declare enum RuntimeZone {
-    FullScreen = 0,
-    Left = 1,
+    Special = 0,
+    LowerLeft = 1,
     LowerRight = 2,
-    TopBar = 3,
-    Overlay = 4
+    Upper = 3,
+    Center = 4
 }
 export declare const RuntimeZoneAlias: {
-    readonly CenterStage: RuntimeZone.FullScreen;
-    readonly SidebarLeft: RuntimeZone.Left;
+    readonly FullScreen: RuntimeZone.Special;
+    readonly Left: RuntimeZone.LowerLeft;
+    readonly TopBar: RuntimeZone.Upper;
+    readonly Overlay: RuntimeZone.Center;
+    readonly CenterStage: RuntimeZone.Special;
+    readonly SidebarLeft: RuntimeZone.LowerLeft;
     readonly CornerLowerRight: RuntimeZone.LowerRight;
-    readonly BannerTop: RuntimeZone.TopBar;
-    readonly FloatingOverlay: RuntimeZone.Overlay;
+    readonly BannerTop: RuntimeZone.Upper;
+    readonly FloatingOverlay: RuntimeZone.Center;
 };
 export declare enum RuntimeComponentFlag {
     Enabled = 1,

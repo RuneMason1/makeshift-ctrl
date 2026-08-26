@@ -22,19 +22,23 @@ export const RuntimeComponentAlias = {
 } as const
 
 export enum RuntimeZone {
-  FullScreen = 0,
-  Left = 1,
+  Special = 0,
+  LowerLeft = 1,
   LowerRight = 2,
-  TopBar = 3,
-  Overlay = 4,
+  Upper = 3,
+  Center = 4,
 }
 
 export const RuntimeZoneAlias = {
-  CenterStage: RuntimeZone.FullScreen,
-  SidebarLeft: RuntimeZone.Left,
+  FullScreen: RuntimeZone.Special,
+  Left: RuntimeZone.LowerLeft,
+  TopBar: RuntimeZone.Upper,
+  Overlay: RuntimeZone.Center,
+  CenterStage: RuntimeZone.Special,
+  SidebarLeft: RuntimeZone.LowerLeft,
   CornerLowerRight: RuntimeZone.LowerRight,
-  BannerTop: RuntimeZone.TopBar,
-  FloatingOverlay: RuntimeZone.Overlay,
+  BannerTop: RuntimeZone.Upper,
+  FloatingOverlay: RuntimeZone.Center,
 } as const
 
 export enum RuntimeComponentFlag {
@@ -72,7 +76,7 @@ export class DeviceRuntimeManifest {
         this.register({
           id: 1,
           type: RuntimeComponentType.Carousel,
-          zone: RuntimeZone.FullScreen,
+          zone: RuntimeZone.Special,
           flags: RuntimeComponentFlag.Enabled | RuntimeComponentFlag.Preload,
         })
       } else if (name === 'overlay-glyphs') {
