@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "id": "example.format-text",
+  "version": "1.0.0",
+  "entry": "format-text.plugin.cjs"
+}

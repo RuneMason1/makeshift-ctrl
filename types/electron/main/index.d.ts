@@ -44,18 +44,12 @@ declare const ipcMainCallHandler: {
     uploadFirmware: () => Promise<{
         ok: boolean;
         reason: string;
-        message?: undefined;
     } | {
         code: number | null;
         stdout: string;
         stderr: string;
         ok: boolean;
         reason?: undefined;
-        message?: undefined;
-    } | {
-        ok: boolean;
-        reason: string;
-        message: string;
     }>;
     fetchBlocklyToolbox: () => Promise<void>;
     fetchBlocklyBlocks: () => Promise<void>;

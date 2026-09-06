@@ -24,6 +24,26 @@ const ASSET_PRESETS = new Map<string, string[]>([
 ])
 
 const SIZE = 32
+const VECTOR_SIZE = 64
+
+function vectorArc(cx: number, cy: number, radius: number,
+  startDegrees: number, endDegrees: number, width = 2): number[] {
+  return [4, cx, cy, radius, Math.round(startDegrees / 2) & 0xff,
+    Math.round(endDegrees / 2) & 0xff, width]
+}
+
+function speakerVectorGlyph(muted: boolean): Buffer {
+  const commands = [
+    // Match the filled transport glyph style instead of using an outline ring.
+    1, 8, 25, 13, 14,
+    2, 20, 24, 38, 12, 38, 52,
+    ...vectorArc(36, 32, 10, -54, 54, 3),
+    ...vectorArc(36, 32, 18, -54, 54, 3),
+  ]
+  if (muted) commands.push(3, 10, 10, 54, 54, 5)
+  commands.push(0)
+  return Buffer.from(commands)
+}
 
 function glyph(draw: (set: (x: number, y: number) => void) => void): Buffer {
   const data = Buffer.alloc((SIZE * SIZE) / 8)
@@ -105,22 +125,12 @@ const assets = new Map<string, RuntimeAsset>([
     }),
   }],
   ['media.mute', {
-    id: 4, format: 1, width: SIZE, height: SIZE,
-    data: glyph((set) => {
-      fillRect(set, 4, 10, 9, 22)
-      fillTriangle(set, 10, 18, 16)
-      thickLine(set, 21, 11, 29, 21, 3)
-      thickLine(set, 29, 11, 21, 21, 3)
-    }),
+    id: 4, format: 2, width: VECTOR_SIZE, height: VECTOR_SIZE,
+    data: speakerVectorGlyph(true),
   }],
   ['media.unmute', {
-    id: 5, format: 1, width: SIZE, height: SIZE,
-    data: glyph((set) => {
-      fillRect(set, 4, 10, 9, 22)
-      fillTriangle(set, 10, 18, 16)
-      soundWave(set, 16, 16, 7)
-      soundWave(set, 16, 16, 12)
-    }),
+    id: 5, format: 2, width: VECTOR_SIZE, height: VECTOR_SIZE,
+    data: speakerVectorGlyph(false),
   }],
 ])
 

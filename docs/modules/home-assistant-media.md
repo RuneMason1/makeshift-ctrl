@@ -3,6 +3,13 @@
 The background Ctrl agent exposes `plugins.homeAssistantMedia.route(action)` to
 cues. Supported actions are `playPause`, `next`, and `previous`.
 
+It also provides `plugins.system.media.seekActiveRelative(seconds)`. This is a
+generic cue API: it resolves the same source currently shown by Now Playing.
+The Home Assistant source implements it by reading its current position and
+issuing a clamped `media_player.media_seek` request. A source without a safe
+relative-seek capability is left unchanged and reported as unsupported; this
+does not fall back to a focused-application keyboard shortcut.
+
 Configure target priority in the private Home Assistant settings:
 
 ```json

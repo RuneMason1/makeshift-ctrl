@@ -1,7 +1,8 @@
 
 # Table of Contents
 
-1.  [Auto Updater](#org1d7390c)
+1.  [P0 Now Playing Metadata Enrichment](#p0-now-playing-metadata-enrichment)
+2.  [Auto Updater](#org1d7390c)
     1.  [hack together something with electron-builder](#org19eb271)
     2.  [differential updates](#org91836a9)
     3.  [electron-forge migration](#orge89a574)
@@ -17,6 +18,21 @@
     2.  [Cue operations refactor for data structure](#orgd5d23ee)
     3.  [Save and Load cue maps](#org8f3dffd)
 
+
+
+<a id="p0-now-playing-metadata-enrichment"></a>
+
+# P0 Now Playing Metadata Enrichment
+
+When Home Assistant provides a Plex episode title but omits its series, season,
+or episode fields, Ctrl must enrich that partial record through its existing
+Plex metadata lookup before it publishes the upper text zone. The display must
+use `Series S##E## - Episode` whenever Plex can identify the item.
+
+This is Ctrl/agent work only. Do not require a Home Assistant configuration
+change or a firmware flash. Keep the exact Home Assistant media-player entity
+attached to the enriched record so transport controls remain pinned to the
+displayed target.
 
 
 <a id="org1d7390c"></a>
