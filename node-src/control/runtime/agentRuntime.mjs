@@ -2532,19 +2532,27 @@ async function syncRuntimeAssets(port, connectionId) {
     begin[0] = asset.id; begin[1] = asset.format
     begin[2] = asset.width; begin[3] = asset.height
     begin.writeUInt16BE(asset.data.length, 4)
-    if (!port.sendPacket(ASSET_BEGIN, begin)) return false
-    await new Promise(resolve => setTimeout(resolve, INITIAL_PACKET_GAP_MS))
+    try {
+      await sendConfirmedCachePacket(port, ASSET_BEGIN, begin)
+    } catch (error) {
+      report('runtime-asset-begin-error', { assetId: asset.id, message: String(error) })
+      return false
+    }
     // Large assets use the normal chunk protocol. This keeps cue visuals
     // generic and lets Ctrl preload all active glyphs when the device connects.
     for (let offset = 0; offset < asset.data.length; offset += 220) {
       const data = asset.data.subarray(offset, offset + 220)
       const chunk = Buffer.allocUnsafe(2 + data.length)
       chunk.writeUInt16BE(offset, 0); data.copy(chunk, 2)
-      if (!port.sendPacket(ASSET_CHUNK, chunk)) return false
+      if (!await queueWirePacket(port, ASSET_CHUNK, chunk)) return false
       await new Promise(resolve => setTimeout(resolve, INITIAL_PACKET_GAP_MS))
     }
-    if (!port.sendPacket(ASSET_COMMIT)) return false
-    await new Promise(resolve => setTimeout(resolve, INITIAL_PACKET_GAP_MS))
+    try {
+      await sendConfirmedCachePacket(port, ASSET_COMMIT)
+    } catch (error) {
+      report('runtime-asset-commit-error', { assetId: asset.id, message: String(error) })
+      return false
+    }
   }
   report('runtime-assets-synced', {
     assetIds: assets.map(asset => asset.id),
