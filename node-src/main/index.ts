@@ -86,7 +86,7 @@ import { Fileio } from './fileio'
 import { DeviceRuntimeManifest } from './deviceRuntime'
 import { CollectionProviderRegistry } from './collectionProviderRegistry'
 import { collectionProviderCatalog } from './collectionProviderCatalog'
-import { readCoreStatus } from './coreBridge'
+import { flashCoreFirmware, readCoreStatus } from './coreBridge'
 
 
 let nanoid
@@ -317,70 +317,27 @@ async function uploadFirmwareFromCtrl() {
     return { ok: false, reason: 'busy' }
   }
 
-  const firmwareRepo = resolveFirmwareRepoPath()
-  if (typeof firmwareRepo === 'undefined') {
-    await dialog.showMessageBox({
-      type: 'error',
-      title: 'Firmware Update',
-      message: 'Could not find the makeshift-firmware repository.',
-      detail: 'Set MAKESHIFT_FIRMWARE_REPO or keep makeshift-firmware beside makeshift-ctrl.',
-    })
-    return { ok: false, reason: 'missing-firmware-repo' }
-  }
-
-  const platformioExecutable = resolvePlatformioExecutable()
-  if (typeof platformioExecutable === 'undefined') {
-    await dialog.showMessageBox({
-      type: 'error',
-      title: 'Firmware Update',
-      message: 'Could not find PlatformIO.',
-      detail: 'Set MAKESHIFT_PLATFORMIO or install PlatformIO for the current Windows user.',
-    })
-    return { ok: false, reason: 'missing-platformio' }
-  }
-
   firmwareUpdateInProgress = true
   rebuildTrayMenu()
   try {
-    await pauseCtrlSerial()
-    const uploadResult = await new Promise<{ code: number | null, stdout: string, stderr: string }>((resolveUpload) => {
-      const child = spawn(platformioExecutable, ['run', '-t', 'upload'], {
-        cwd: firmwareRepo,
-        windowsHide: true,
-      })
-
-      let stdout = ''
-      let stderr = ''
-
-      child.stdout?.on('data', (chunk) => {
-        stdout += chunk.toString()
-      })
-      child.stderr?.on('data', (chunk) => {
-        stderr += chunk.toString()
-      })
-      child.on('close', (code) => {
-        resolveUpload({ code, stdout, stderr })
-      })
-    })
-
-    if (uploadResult.code === 0) {
+    const uploadResult = await flashCoreFirmware()
+    if (uploadResult.ok) {
       await dialog.showMessageBox({
         type: 'info',
         title: 'Firmware Update',
         message: 'Firmware upload finished.',
       })
-      return { ok: true, ...uploadResult }
+      return uploadResult
     }
 
     await dialog.showMessageBox({
       type: 'error',
       title: 'Firmware Update Failed',
-      message: 'PlatformIO upload did not finish successfully.',
-      detail: uploadResult.stderr || uploadResult.stdout || 'No upload output was captured.',
+      message: 'Core firmware update did not finish successfully.',
+      detail: uploadResult.message || uploadResult.reason || 'No failure detail was returned.',
     })
     return { ok: false, ...uploadResult }
   } finally {
-    await resumeCtrlSerial()
     firmwareUpdateInProgress = false
     rebuildTrayMenu()
   }
