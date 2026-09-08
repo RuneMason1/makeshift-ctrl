@@ -3,6 +3,7 @@
 export const PROTOCOL = Object.freeze({
   capabilityPacket: 20,
   cache: Object.freeze({ begin: 27, chunk: 28, commit: 29, bind: 30, version: 4 }),
+  collection: Object.freeze({ presentation: 32, maxActionLabelBytes: 24 }),
   capabilityLayout: Object.freeze({
     minLength: 13,
     cacheProtocolOffset: 9,

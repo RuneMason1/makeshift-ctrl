@@ -35,7 +35,7 @@ const COLLECTION_INPUT_BINDING = 25
 const STATUS_BADGE = 26
 const SCREEN_ZONE = 27
 const LED_EFFECT = 28
-const COLLECTION_OPEN = 29
+const COLLECTION_PRESENTATION = PROTOCOL.collection.presentation
 const CACHE_FILE_BEGIN = CACHE_PACKET_TYPES.begin
 const CACHE_FILE_CHUNK = CACHE_PACKET_TYPES.chunk
 const CACHE_FILE_COMMIT = CACHE_PACKET_TYPES.commit
@@ -564,7 +564,16 @@ async function waitForSteamArtworkWorker() {
   }
 }
 
-async function openCarouselSession(session) {
+function collectionPresentation(value = {}) {
+  const idle = Buffer.from(String(value.idleAction ?? 'Select to activate'), 'utf8')
+    .subarray(0, PROTOCOL.collection.maxActionLabelBytes)
+  const active = Buffer.from(String(value.activeAction ?? 'Activating...'), 'utf8')
+    .subarray(0, PROTOCOL.collection.maxActionLabelBytes)
+  if (idle.length === 0 || active.length === 0) throw new Error('Carousel presentation labels are required')
+  return Buffer.concat([Buffer.from([idle.length, active.length]), idle, active])
+}
+
+async function openCarouselSession(session, options = {}) {
   const port = activePort
   if (!port) throw new Error('MakeShift is not connected')
   const boundSession = await carouselSessions.open(session, async ({ session: candidate, isCurrent }) => {
@@ -578,6 +587,10 @@ async function openCarouselSession(session) {
     if (!isCurrent()) return false
     if (!port.sendPacket(GAME_LIST_BEGIN, Buffer.from([candidate.items.length]))) {
       throw new Error('Could not start carousel list transfer')
+    }
+    const presentation = options.presentation ?? candidate.presentation
+    if (!port.sendPacket(COLLECTION_PRESENTATION, collectionPresentation(presentation))) {
+      throw new Error('Could not set carousel presentation')
     }
     for (const item of candidate.items) {
       if (!isCurrent()) return false
