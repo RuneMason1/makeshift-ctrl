@@ -394,9 +394,9 @@ function queueWirePacket(port, type, body, { acknowledge = false } = {}) {
     execute: async () => {
       if (port !== activePort || connectionId !== deviceConnectionId) return false
       if (!acknowledge) return sendCachePacket(port, type, body)
-      const acknowledgement = firmwareAcks.waitFor(type)
+      const acknowledgement = firmwareAcks.waitFor(type, { epoch: connectionId })
       if (!sendCachePacket(port, type, body)) {
-        firmwareAcks.reject(type, `Could not send cache packet ${type}`)
+        firmwareAcks.reject(type, `Could not send cache packet ${type}`, { epoch: connectionId })
       }
       await acknowledgement
       return true
@@ -2955,13 +2955,15 @@ function attachPort(fp) {
     // The bundled serial wrapper logs ERROR but discards its request/error
     // bytes. Preserve them here so cache faults can be diagnosed remotely.
     if (packet?.[0] === 4) {
-      firmwareAcks.reject(packet[1], `Firmware rejected cache packet ${packet[1]} with error ${packet[2]}`)
+      firmwareAcks.reject(packet[1], `Firmware rejected cache packet ${packet[1]} with error ${packet[2]}`, {
+        epoch: connectionId,
+      })
       report('firmware-protocol-error', {
         request: packet[1],
         error: packet[2],
       })
     }
-    firmwareAcks.accept(packet)
+    firmwareAcks.accept(packet, { epoch: connectionId })
     return parseFirmwarePacket(packet)
   }
   // Firmware ERROR packets were previously only visible in the serial

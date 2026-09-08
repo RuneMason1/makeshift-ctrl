@@ -86,6 +86,14 @@ test('ProtocolAckTracker discards late acknowledgements from a disconnected sess
   await newBegin
 })
 
+test('ProtocolAckTracker does not let an older connection ACK satisfy a retry', async () => {
+  const tracker = new ProtocolAckTracker()
+  const retry = tracker.waitFor(29, { epoch: 2 })
+  assert.equal(tracker.accept(Buffer.from([1, 29]), { epoch: 1 }), false)
+  assert.equal(tracker.accept(Buffer.from([1, 29]), { epoch: 2 }), true)
+  await retry
+})
+
 test('ArtworkTransferScheduler promotes selected work ahead of preload', async () => {
   const scheduler = new ArtworkTransferScheduler()
   const order = []
