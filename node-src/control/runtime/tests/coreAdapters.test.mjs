@@ -10,6 +10,19 @@ import { CACHE_PACKET_TYPES, CACHE_PROTOCOL_VERSION } from '../cacheProtocol.mjs
 import { ProtocolAckTracker } from '../protocolAckTracker.mjs'
 import { createLegacyDirectArtTransport } from '../legacyDirectArtTransport.mjs'
 import { SerialLifecycle } from '../serialLifecycle.mjs'
+import { WireScheduler } from '../wireScheduler.mjs'
+
+test('WireScheduler cancels queued work from an older connection epoch', async () => {
+  const scheduler = new WireScheduler()
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  const first = scheduler.enqueue({ key: 'first', execute: async () => { await gate; return 'first' } })
+  const stale = scheduler.enqueue({ key: 'stale', execute: async () => 'stale' })
+  scheduler.beginEpoch()
+  release()
+  assert.equal(await first, 'first')
+  assert.equal(await stale, false)
+})
 
 test('ArtworkAssetStore coalesces and reuses preparation', async () => {
   const store = new ArtworkAssetStore()

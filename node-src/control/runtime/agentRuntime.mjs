@@ -12,6 +12,7 @@ import { createLegacyDirectArtTransport } from './legacyDirectArtTransport.mjs'
 import { CarouselSessionCoordinator } from './carouselSessionCoordinator.mjs'
 import { CACHE_PACKET_TYPES, CACHE_PROTOCOL_VERSION } from './cacheProtocol.mjs'
 import { ProtocolAckTracker } from './protocolAckTracker.mjs'
+import { WireScheduler } from './wireScheduler.mjs'
 import { SerialLifecycle } from './serialLifecycle.mjs'
 import { RelativeSeek } from './relativeSeek.mjs'
 
@@ -286,6 +287,7 @@ const DEVICE_CACHE_CAPACITY = 7
 const legacyArtworkResidency = new LegacyArtworkResidency(DEVICE_CACHE_CAPACITY)
 const deviceAssetKeys = new Set()
 let deviceAssetQueue = Promise.resolve()
+const wireScheduler = new WireScheduler()
 const localDeviceAssets = new Map()
 let localDeviceAssetBytes = 0
 const LOCAL_DEVICE_ASSET_MEMORY_LIMIT = 64 * 1024 * 1024
@@ -367,6 +369,9 @@ function collectionCardBegin(sessionId, assetName, itemIndex, title, width = 0, 
 }
 
 function sendCachePacket(port, type, body) {
+  // Commit packets are intentionally payload-free; normalize them before the
+  // negotiated frame-size check used by cache transfers.
+  body ??= Buffer.alloc(0)
   // The packaged serial wrapper guards its public sendPacket API at 240 bytes
   // for the old firmware. Protocol-v2 cache chunks advertise a larger device
   // frame and use the wrapper's existing framed sender only after negotiation.
@@ -378,6 +383,25 @@ function sendCachePacket(port, type, body) {
   } catch {
     return false
   }
+}
+
+function queueWirePacket(port, type, body, { acknowledge = false } = {}) {
+  const connectionId = deviceConnectionId
+  return wireScheduler.enqueue({
+    epoch: connectionId,
+    key: `${connectionId}/${type}`,
+    priority: acknowledge ? 0 : 1,
+    execute: async () => {
+      if (port !== activePort || connectionId !== deviceConnectionId) return false
+      if (!acknowledge) return sendCachePacket(port, type, body)
+      const acknowledgement = firmwareAcks.waitFor(type)
+      if (!sendCachePacket(port, type, body)) {
+        firmwareAcks.reject(type, `Could not send cache packet ${type}`)
+      }
+      await acknowledgement
+      return true
+    },
+  })
 }
 
 function isCurrentCarouselTransfer(session, port) {
@@ -487,7 +511,7 @@ async function uploadDeviceAsset(assetName, artwork) {
     const chunk = Buffer.allocUnsafe(4 + count)
     chunk.writeUInt32BE(offset, 0)
     staged.artwork.copy(chunk, 4, offset, offset + count)
-    if (!sendCachePacket(port, CACHE_FILE_CHUNK, chunk)) throw new Error('Could not write cache file')
+    if (!await queueWirePacket(port, CACHE_FILE_CHUNK, chunk)) throw new Error('Could not write cache file')
     await new Promise(resolve => setTimeout(resolve, CACHE_PACKET_GAP_MS))
   }
   await sendConfirmedCachePacket(port, CACHE_FILE_COMMIT)
@@ -503,11 +527,9 @@ async function uploadDeviceAsset(assetName, artwork) {
 }
 
 async function sendConfirmedCachePacket(port, packetType, body) {
-  const acknowledgement = firmwareAcks.waitFor(packetType)
-  if (!port.sendPacket(packetType, body)) {
-    firmwareAcks.reject(packetType, `Could not send cache packet ${packetType}`)
+  if (!await queueWirePacket(port, packetType, body, { acknowledge: true })) {
+    throw new Error('Device disconnected before cache packet could be sent')
   }
-  await acknowledgement
 }
 
 function ensureDeviceAsset(assetName, artwork) {
@@ -2924,6 +2946,7 @@ async function initializeDeviceSession(port, connectionId) {
 }
 
 function attachPort(fp) {
+  wireScheduler.beginEpoch()
   const port = serial.Ports[fp.deviceSerial]
   const connectionId = ++deviceConnectionId
   activePort = port
