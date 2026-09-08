@@ -4,6 +4,19 @@ export type SensorEventDetails = {
     sensorType: string;
     eventType: string;
 };
+export type CoreStatus = {
+    attached: boolean;
+    core: boolean;
+    connected: boolean;
+    firmwareUpdateInProgress: boolean;
+    cueCount: number;
+    mappingCount: number;
+    activeCarousel?: {
+        id: string;
+        sessionId: number;
+    } | null;
+    reason?: string;
+};
 export type Folder = {
     name: string;
     subFolders: Folder[];

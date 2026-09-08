@@ -16,6 +16,7 @@ export const ctrlIpcApi = {
     hardwareDescriptors: 'mkshft-get-hardware-descriptors',
     eventsAsList: 'mkshft-get-events-list',
     connectedDevices: 'mkshft-get-connectedDevices',
+    coreStatus: 'mkshft-get-coreStatus',
     logRank: 'mkshft-get-logRank',
     clientSize: 'window-get-size',
     allCues: 'cue-get-all',

@@ -86,6 +86,7 @@ import { Fileio } from './fileio'
 import { DeviceRuntimeManifest } from './deviceRuntime'
 import { CollectionProviderRegistry } from './collectionProviderRegistry'
 import { collectionProviderCatalog } from './collectionProviderCatalog'
+import { readCoreStatus } from './coreBridge'
 
 
 let nanoid
@@ -737,6 +738,7 @@ const ipcMainCallHandler = {
  */
 const ipcMainGetHandler = {
   connectedDevices: async () => getPortFingerPrintSnapShot(),
+  coreStatus: async () => readCoreStatus(),
   deviceEvents: async (): Promise<MakeShiftDeviceEvents> => DeviceEvents,
   serialEvents: async (): Promise<MakeShiftSerialEvents> => SerialEvents,
   hardwareDescriptors: async () => HardwareDescriptors,

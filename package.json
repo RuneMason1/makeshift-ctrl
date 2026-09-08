@@ -13,7 +13,8 @@
     "publish": "npm run set-build -- production electron-forge publish",
     "postinstall": "node ./scripts/postinstall.mjs",
     "set-build": "node ./scripts/set-build.mjs",
-    "typecheck": "npm run gen-api"
+    "typecheck": "npm run gen-api",
+    "test:core": "node --test node-src/control/runtime/tests/*.test.mjs"
   },
   "repository": {
     "type": "git",

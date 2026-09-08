@@ -206,7 +206,7 @@ traffic, and UI churn. Increase it only after measuring interaction latency.
 Recommended policy:
 
 - fetch after HA authentication and when the cue first opens
-- refresh in the background every 120 seconds while connected
+- refresh in the background every five minutes while Ctrl is running
 - refresh immediately when Ctrl regains HA connectivity
 - refresh after a successful activation, but delay about 10 seconds so Plex
   has time to update Continue Watching

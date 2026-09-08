@@ -62,6 +62,19 @@ declare const ipcMainCallHandler: {
  */
 declare const ipcMainGetHandler: {
     connectedDevices: () => Promise<any>;
+    coreStatus: () => Promise<Readonly<{
+        attached: boolean;
+        core: boolean;
+        connected: boolean;
+        firmwareUpdateInProgress: boolean;
+        cueCount: number;
+        mappingCount: number;
+        activeCarousel?: Readonly<{
+            id: string;
+            sessionId: number;
+        }> | null;
+        reason?: string;
+    }>>;
     deviceEvents: () => Promise<MakeShiftDeviceEvents>;
     serialEvents: () => Promise<MakeShiftSerialEvents>;
     hardwareDescriptors: () => Promise<any>;

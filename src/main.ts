@@ -12,6 +12,16 @@ export type SensorEventDetails = {
   sensorType: string,
   eventType: string,
 }
+export type CoreStatus = {
+  attached: boolean,
+  core: boolean,
+  connected: boolean,
+  firmwareUpdateInProgress: boolean,
+  cueCount: number,
+  mappingCount: number,
+  activeCarousel?: { id: string, sessionId: number } | null,
+  reason?: string,
+}
 const dcDevice: MakeShiftPortFingerprint = {
   devicePath: '',
   portId: '',
@@ -51,6 +61,7 @@ const cueRoot: Folder = {
     clientSize: ref(await window.MakeShiftCtrl.get.clientSize()) as Ref<Size>,
     activePopups: ref<SimplePopup[]>([]),
     terminalActive: ref(false),
+    coreStatus: ref(await window.MakeShiftCtrl.get.coreStatus()) as Ref<CoreStatus>,
   }
 
   console.log(Constants.HardwareDescriptors)
@@ -67,6 +78,11 @@ const cueRoot: Folder = {
   }
 
   state.selectedView.value = await window.MakeShiftCtrl.get.currentView()
+
+  // Read-only attachment to the existing Core host. Ctrl never claims COM3.
+  setInterval(async () => {
+    state.coreStatus.value = await window.MakeShiftCtrl.get.coreStatus()
+  }, 2000)
 
   // console.log(`initial selected event: ${state.selectedEvent}`)
   // console.log(`initial selected event cues: ${state.selectedEventCues}`)
@@ -157,6 +173,7 @@ const cueRoot: Folder = {
     .provide('current-device', state.currentDevice)
     .provide('popups', state.activePopups)
     .provide('terminal-active', state.terminalActive)
+    .provide('core-status', state.coreStatus)
     .mount('#app')
     .$nextTick(() => {
       postMessage({ payload: 'removeLoading' }, '*')

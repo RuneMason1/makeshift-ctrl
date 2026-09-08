@@ -15,6 +15,7 @@ import SplitPanelHorz from './components/SplitPanelHorz.vue'
 import { checkFontSize, remToPx, updateFont } from './utilities/cssUnits'
 import BlocklyBox from './components/BlocklyBox.vue'
 import Popup from './components/Popup.vue'
+import CoreWorkspaceHeader from './components/CoreWorkspaceHeader.vue'
 import { View } from './renderer'
 
 type Size = {
@@ -136,6 +137,7 @@ nextTick(() => {
 			font-size-monitor-text
 		</div>
 		<Popup />
+		<CoreWorkspaceHeader />
 		<!-- visible elements -->
 		<!-- <TesterButton /> -->
 		<div v-if="selectedView === 'blockly'">

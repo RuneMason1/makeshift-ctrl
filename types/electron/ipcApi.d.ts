@@ -16,6 +16,7 @@ export declare const ctrlIpcApi: {
         hardwareDescriptors: string;
         eventsAsList: string;
         connectedDevices: string;
+        coreStatus: string;
         logRank: string;
         clientSize: string;
         allCues: string;
