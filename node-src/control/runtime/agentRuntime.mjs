@@ -3289,6 +3289,15 @@ async function finishTeensyBoot() {
   await runProcess('taskkill.exe', ['/IM', 'teensy.exe', '/F']).catch(() => {})
 }
 
+async function waitForFirmwareHandshake(timeoutMs) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (activePort && deviceCapabilities) return deviceCapabilities
+    await new Promise(resolve => setTimeout(resolve, 250))
+  }
+  throw new Error(`MakeShift firmware did not complete a typed handshake within ${timeoutMs / 1000} seconds`)
+}
+
 async function verifyCheckpointFirmware(imagePath) {
   const [resolvedImage, resolvedRoot] = await Promise.all([
     realpath(imagePath), realpath(firmwareArchiveRoot),
@@ -3327,6 +3336,7 @@ async function flashFirmware(prebuiltPath) {
   }
   firmwareUpdateInProgress = true
   yieldSerial()
+  let serialResumed = false
   report('firmware-update-started', { firmwareHex: imagePath, prebuilt: Boolean(prebuiltPath) })
   try {
     await new Promise(resolve => setTimeout(resolve, 500))
@@ -3334,15 +3344,21 @@ async function flashFirmware(prebuiltPath) {
       ? await runPrebuiltFirmwareLoader(imagePath)
       : await runFirmwareLoader()
     await finishTeensyBoot()
-    report('firmware-update-complete', { firmwareHex: imagePath, prebuilt: Boolean(prebuiltPath) })
-    return { ok: true, ...result }
+    resumeSerial()
+    serialResumed = true
+    resetSerialScan('firmware-application-returned')
+    const capabilities = await waitForFirmwareHandshake(30000)
+    report('firmware-update-complete', {
+      firmwareHex: imagePath, prebuilt: Boolean(prebuiltPath), capabilities,
+    })
+    return { ok: true, ...result, capabilities }
   } catch (error) {
     const message = String(error?.message ?? error)
     report('firmware-update-failed', { firmwareHex: imagePath, prebuilt: Boolean(prebuiltPath), message })
     return { ok: false, reason: 'loader-failed', message }
   } finally {
     firmwareUpdateInProgress = false
-    resumeSerial()
+    if (!serialResumed) resumeSerial()
     setTimeout(() => resetSerialScan('post-firmware-update'), 5000).unref()
   }
 }
