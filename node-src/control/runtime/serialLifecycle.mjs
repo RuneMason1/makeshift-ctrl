@@ -24,7 +24,7 @@ export class SerialLifecycle {
   stop() {
     if (!this.started) return
     this.serial.stopAutoScan()
-    for (const port of Object.values(this.serial.Ports)) port.close()
+    this.closeAuthorityPorts()
     this.serial.PortAuthority.off?.(this.serial.PortAuthorityEvents.port.opened, this.openedHandler)
     this.serial.PortAuthority.off?.(this.serial.PortAuthorityEvents.port.closed, this.closedHandler)
     this.started = false
@@ -35,7 +35,7 @@ export class SerialLifecycle {
     if (!this.started || this.yielded) return false
     this.yielded = true
     this.serial.stopAutoScan()
-    for (const port of Object.values(this.serial.Ports)) port.close()
+    this.closeAuthorityPorts()
     this.report('serial-yielded')
     return true
   }
@@ -58,5 +58,15 @@ export class SerialLifecycle {
 
   snapshot() {
     return Object.freeze({ started: this.started, yielded: this.yielded })
+  }
+
+  closeAuthorityPorts() {
+    // New Serial releases own registry cleanup and keepalive cancellation.
+    // Keep the fallback only while the Phase 0 installed package is in use.
+    if (typeof this.serial.closeAllPorts === 'function') {
+      this.serial.closeAllPorts()
+      return
+    }
+    for (const port of Object.values(this.serial.Ports)) port.close()
   }
 }

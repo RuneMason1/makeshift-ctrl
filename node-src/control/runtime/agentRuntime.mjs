@@ -2368,7 +2368,9 @@ function loadProfile() {
   const layer = config?.deviceLayout?.layers?.[0] ?? []
   mappings = new Map(layer.map(([eventName, cueId]) => [eventName, cueId.replaceAll('\\', '/')]))
   modules.clear()
-  carouselSessions.clear()
+  // The firmware retains its current collection across a profile reload. Keep
+  // the matching host session so select/activate events remain actionable.
+  const retainedCarousel = carouselSessions.active
 
   for (const cueId of new Set(mappings.values())) {
     const cuePath = join(cuesRoot, ...cueId.split('/'))
@@ -2383,7 +2385,12 @@ function loadProfile() {
       report('cue-error', { cueId, message: String(error) })
     }
   }
-  report('reloaded', { cueCount: modules.size, mappingCount: mappings.size })
+  report('reloaded', {
+    cueCount: modules.size,
+    mappingCount: mappings.size,
+    retainedCarousel: retainedCarousel?.id ?? null,
+    retainedCarouselSessionId: retainedCarousel?.wireSessionId ?? null,
+  })
   void refreshHomeAssistantMediaPlayer().catch(error =>
     report('home-assistant-media-refresh-error', { message: String(error) }))
 }

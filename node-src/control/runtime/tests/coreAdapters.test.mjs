@@ -200,3 +200,19 @@ test('SerialLifecycle cleans up listeners across stop', () => {
   assert.equal(calls.includes('serial-yielded'), true)
   assert.equal(calls.includes('serial-resumed'), true)
 })
+
+test('SerialLifecycle delegates port cleanup to a capable authority', () => {
+  const calls = []
+  const serial = {
+    Ports: { legacy: { close: () => calls.push('legacy-close') } },
+    PortAuthority: { on: () => {}, off: () => {} },
+    PortAuthorityEvents: { port: { opened: 'opened', closed: 'closed' } },
+    setLogLevel: () => {}, setPortAuthorityLogLevel: () => {},
+    startAutoScan: () => calls.push('scan-start'), stopAutoScan: () => calls.push('scan-stop'),
+    closeAllPorts: () => calls.push('authority-close-all'),
+  }
+  const lifecycle = new SerialLifecycle({ serial, report: () => {}, onOpened: () => {}, onClosed: () => {} })
+  lifecycle.start()
+  lifecycle.yield()
+  assert.deepEqual(calls, ['scan-start', 'scan-stop', 'authority-close-all'])
+})
