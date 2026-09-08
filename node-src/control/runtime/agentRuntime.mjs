@@ -1773,7 +1773,17 @@ function registerBuiltInCuePlugins() {
   registerCuePlugin({ id: 'screenZones', version: '1.0.0',
     create: ({ cue }) => screenZonePlugin(cue) })
   registerCuePlugin({ id: 'carousel', version: '1.0.0',
-    create: () => Object.freeze({ open: openCarouselSession }) })
+    create: () => Object.freeze({
+      open: openCarouselSession,
+      isOpen: session => carouselSessions.active?.id === session?.id,
+      activateFirst: async session => {
+        const first = session?.items?.[0]
+        if (!first || !session.activate) return false
+        await session.activate(first)
+        report('carousel-first-activated', { id: session.id, itemId: first.itemId, title: first.title })
+        return true
+      },
+    }) })
 }
 
 function loadUserCuePlugins() {
