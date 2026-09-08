@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module'
 import { createServer } from 'node:net'
 import { existsSync, readFileSync, readdirSync, statSync, watch } from 'node:fs'
-import { appendFile, mkdir, readFile, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, readFile, readdir, realpath, rename, stat, unlink, writeFile } from 'node:fs/promises'
 import { basename, dirname, extname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { spawn } from 'node:child_process'
@@ -3289,17 +3289,35 @@ async function finishTeensyBoot() {
   await runProcess('taskkill.exe', ['/IM', 'teensy.exe', '/F']).catch(() => {})
 }
 
+async function verifyCheckpointFirmware(imagePath) {
+  const [resolvedImage, resolvedRoot] = await Promise.all([
+    realpath(imagePath), realpath(firmwareArchiveRoot),
+  ])
+  const rootPrefix = `${resolvedRoot}${process.platform === 'win32' ? '\\' : '/'}`
+  if (!resolvedImage.startsWith(rootPrefix) || extname(resolvedImage).toLowerCase() !== '.hex') {
+    throw new Error('Prebuilt firmware must be a checkpoint HEX image')
+  }
+  const checksumPath = join(dirname(resolvedImage), 'CHECKSUMS.sha256')
+  if (!existsSync(checksumPath)) throw new Error('Checkpoint checksum manifest is missing')
+  const checksums = await readFile(checksumPath, 'utf8')
+  const match = checksums.split(/\r?\n/).map(line => line.trim()).find(line =>
+    line.endsWith(`  ${basename(resolvedImage)}`) || line.endsWith(` *${basename(resolvedImage)}`))
+  if (!match) throw new Error('Checkpoint does not declare the selected HEX image')
+  const expected = match.split(/\s+/)[0].toLowerCase()
+  const actual = createHash('sha256').update(await readFile(resolvedImage)).digest('hex')
+  if (actual !== expected) throw new Error('Checkpoint firmware hash does not match its manifest')
+  return { path: resolvedImage, sha256: actual }
+}
+
 async function flashFirmware(prebuiltPath) {
   if (firmwareUpdateInProgress) return { ok: false, reason: 'busy' }
-  const imagePath = prebuiltPath ?? firmwareHex
+  let imagePath = prebuiltPath ?? firmwareHex
   if (!existsSync(imagePath)) return { ok: false, reason: 'missing-firmware', path: imagePath }
   if (prebuiltPath) {
-    const normalizedImage = imagePath.replaceAll('/', '\\').toLowerCase()
-    const normalizedRoot = firmwareArchiveRoot.replaceAll('/', '\\').toLowerCase()
-    if (!normalizedImage.startsWith(`${normalizedRoot}\\`) ||
-        !normalizedImage.endsWith('.hex')) {
-      return { ok: false, reason: 'prebuilt-path-not-allowed', path: imagePath }
-    }
+    let verified
+    try { verified = await verifyCheckpointFirmware(imagePath) }
+    catch (error) { return { ok: false, reason: 'invalid-checkpoint', message: String(error.message ?? error) } }
+    imagePath = verified.path
     if (!existsSync(teensyLoader)) {
       return { ok: false, reason: 'missing-teensy-loader', path: teensyLoader }
     }
