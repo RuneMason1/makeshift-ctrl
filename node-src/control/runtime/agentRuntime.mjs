@@ -2481,9 +2481,7 @@ function collectionInputBinding() {
   let buttonIndex
   for (const [eventName, cueId] of mappings) {
     const cue = modules.get(cueId)
-    const isCollection = cueId.endsWith('steam-game-carousel.cue.js') ||
-      cue?.requiredComponents?.some(component =>
-        component === 'carousel' || component === 'collection-view')
+    const isCollection = cue?.requiredComponents?.includes('collection-view')
     if (!isCollection) continue
     const dialMatch = /^sensor-(\d+)-dial-(?:increment|decrement)$/.exec(eventName)
     const buttonMatch = /^sensor-(\d+)-button-pressed$/.exec(eventName)
