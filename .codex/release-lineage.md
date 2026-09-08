@@ -72,3 +72,11 @@ Before every coordinated push, update this file in all four repositories with
 the exact component commits, agent companion commit, published HEX path and
 SHA-256, private cue-manifest SHA-256, protocol result, and cold-boot result.
 Then create the same annotated `lineage/<id>` tag in all four repositories.
+
+## 2026-09-07 coordinated checkpoint
+
+Firmware `849b1a731ec6e1402f08735a45c134c9c5b43e49`; Ctrl
+`b3ca805ca88054640ef24086760a1207b28eccdf`; Systray/V2
+`716aac0ed5f05c27ee981b705d1fc037509ede73`; Msg
+`f743600cd1dc9099676b87b3f516d69e5f01e486`; Serial
+`acd8dc15d03958eeacbefd0371564d6ed47b6c3c`.
