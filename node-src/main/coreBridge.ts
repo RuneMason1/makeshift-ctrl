@@ -27,11 +27,13 @@ export function readCoreStatus(timeoutMs = 750): Promise<CoreBridgeStatus> {
     let response = ''
     socket.setEncoding('utf8')
     socket.setTimeout(timeoutMs)
-    socket.on('connect', () => socket.write('status\n'))
+    socket.on('connect', () => socket.write(`${JSON.stringify({
+      version: 1, id: 'ctrl-status', method: 'core.status' })}\n`))
     socket.on('data', chunk => { response += chunk })
     socket.on('end', () => {
       try {
-        const status = JSON.parse(response)
+        const reply = JSON.parse(response)
+        const status = reply?.ok === true ? reply.result : undefined
         finish({ attached: true, core: Boolean(status.core), connected: Boolean(status.connected),
           firmwareUpdateInProgress: Boolean(status.firmwareUpdateInProgress),
           cueCount: Number(status.cueCount) || 0, mappingCount: Number(status.mappingCount) || 0,

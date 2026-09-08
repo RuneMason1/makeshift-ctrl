@@ -3400,30 +3400,68 @@ export function resumeCore() {
   return true
 }
 
-const server = createServer(socket => {
-  socket.setEncoding('utf8')
-  socket.on('data', data => {
-    const command = data.trim()
-    if (command === 'status') socket.end(`${JSON.stringify(getCoreStatus())}\n`)
-    else if (command === 'reload') {
-      socket.end(reloadCore() ? 'ok\n' : 'not-started\n')
-    }
-    else if (command === 'yield') socket.end(yieldCore() ? 'ok\n' : 'not-started\n')
-    else if (command === 'resume') socket.end(resumeCore() ? 'ok\n' : 'not-started\n')
-    else if (command === 'flash') {
-      void flashFirmware().then(result => socket.end(`${JSON.stringify(result)}\n`))
-    }
-    else if (command.startsWith('flash-prebuilt:')) {
-      const imagePath = command.slice('flash-prebuilt:'.length)
-      void flashFirmware(imagePath).then(result => socket.end(`${JSON.stringify(result)}\n`))
-    }
-    else if (command === 'capture-input') {
+const RPC_VERSION = 1
+const MAX_RPC_BYTES = 16 * 1024
+
+function rpcReply(id, ok, value) {
+  return `${JSON.stringify(ok ? { version: RPC_VERSION, id, ok, result: value }
+    : { version: RPC_VERSION, id, ok, error: String(value) })}\n`
+}
+
+async function handleRpc(request) {
+  if (!request || request.version !== RPC_VERSION ||
+      !['string', 'number'].includes(typeof request.id) ||
+      typeof request.method !== 'string' ||
+      (request.params !== undefined && (request.params === null ||
+        Array.isArray(request.params) || typeof request.params !== 'object'))) {
+    throw new Error('Invalid RPC request')
+  }
+  switch (request.method) {
+    case 'core.status': return getCoreStatus()
+    case 'core.reload': return { started: reloadCore() }
+    case 'serial.yield': return { started: yieldCore() }
+    case 'serial.resume': return { started: resumeCore() }
+    case 'input.capture':
       inputCaptureUntil = Date.now() + 60000
       report('input-capture-started', { durationMs: 60000 })
-      socket.end('ok\n')
+      return { durationMs: 60000 }
+    case 'firmware.flash': return flashFirmware()
+    default: throw new Error('Unknown RPC method')
+  }
+}
+
+function legacyRequest(command) {
+  const methods = {
+    status: 'core.status', reload: 'core.reload', yield: 'serial.yield',
+    resume: 'serial.resume', 'capture-input': 'input.capture', flash: 'firmware.flash',
+  }
+  return methods[command] ? { version: RPC_VERSION, id: 'legacy', method: methods[command] } : null
+}
+
+const server = createServer(socket => {
+  socket.setEncoding('utf8')
+  let pending = ''
+  socket.on('data', data => {
+    pending += data
+    if (Buffer.byteLength(pending, 'utf8') > MAX_RPC_BYTES) {
+      socket.end(rpcReply(null, false, 'RPC message too large'))
+      return
     }
-    else if (command === 'shutdown') { socket.end('ok\n'); void stopCore({ exitProcess: true }) }
-    else socket.end('unknown\n')
+    let newline
+    while ((newline = pending.indexOf('\n')) >= 0) {
+      const line = pending.slice(0, newline).trim()
+      pending = pending.slice(newline + 1)
+      if (!line) continue
+      let request
+      try { request = JSON.parse(line) } catch { request = legacyRequest(line) }
+      if (!request) { socket.end('unknown\n'); return }
+      void handleRpc(request).then(result => {
+        if (request.id === 'legacy') socket.end(request.method === 'core.status'
+          ? `${JSON.stringify(result)}\n` : 'ok\n')
+        else socket.end(rpcReply(request.id, true, result))
+      }).catch(error => socket.end(request.id === 'legacy' ? 'error\n'
+        : rpcReply(request.id, false, error.message ?? error)))
+    }
   })
 })
 server.on('error', error => report('core-pipe-error', { message: String(error), code: error.code }))
