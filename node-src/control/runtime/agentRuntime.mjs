@@ -348,6 +348,7 @@ const legacyDirectArtTransport = createLegacyDirectArtTransport({
 let advertisedDeviceCacheBytes = 256 * 1024
 let deviceCacheProtocolVersion = 0
 let deviceCapabilities = null
+let nextCacheTransactionId = 1
 const firmwareAcks = new ProtocolAckTracker()
 
 function deviceAssetKey(name) {
@@ -389,6 +390,9 @@ function sendCachePacket(port, type, body) {
 
 function queueWirePacket(port, type, body, { acknowledge = false } = {}) {
   const connectionId = deviceConnectionId
+  const transactionId = acknowledge && deviceCacheProtocolVersion >= CACHE_PROTOCOL_VERSION
+    ? ((nextCacheTransactionId++ % 0xffff) || (nextCacheTransactionId++ % 0xffff)) : 0
+  if (transactionId) body = Buffer.concat([body ?? Buffer.alloc(0), Buffer.from([transactionId >> 8, transactionId & 0xff])])
   return wireScheduler.enqueue({
     epoch: connectionId,
     key: `${connectionId}/${type}`,
@@ -396,9 +400,9 @@ function queueWirePacket(port, type, body, { acknowledge = false } = {}) {
     execute: async () => {
       if (port !== activePort || connectionId !== deviceConnectionId) return false
       if (!acknowledge) return sendCachePacket(port, type, body)
-      const acknowledgement = firmwareAcks.waitFor(type, { epoch: connectionId })
+      const acknowledgement = firmwareAcks.waitFor(type, { epoch: connectionId, transactionId })
       if (!sendCachePacket(port, type, body)) {
-        firmwareAcks.reject(type, `Could not send cache packet ${type}`, { epoch: connectionId })
+        firmwareAcks.reject(type, `Could not send cache packet ${type}`, { epoch: connectionId, transactionId })
       }
       await acknowledgement
       return true
@@ -2969,7 +2973,7 @@ function attachPort(fp) {
     // bytes. Preserve them here so cache faults can be diagnosed remotely.
     if (packet?.[0] === 4) {
       firmwareAcks.reject(packet[1], `Firmware rejected cache packet ${packet[1]} with error ${packet[2]}`, {
-        epoch: connectionId,
+        epoch: connectionId, transactionId: packet.length >= 5 ? (packet[3] << 8) | packet[4] : 0,
       })
       report('firmware-protocol-error', {
         request: packet[1],

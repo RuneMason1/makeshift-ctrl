@@ -2,7 +2,7 @@
 // Firmware mirrors this fixed binary layout; debug text is telemetry only.
 export const PROTOCOL = Object.freeze({
   capabilityPacket: 20,
-  cache: Object.freeze({ begin: 27, chunk: 28, commit: 29, bind: 30, version: 3 }),
+  cache: Object.freeze({ begin: 27, chunk: 28, commit: 29, bind: 30, version: 4 }),
   capabilityLayout: Object.freeze({
     minLength: 13,
     cacheProtocolOffset: 9,

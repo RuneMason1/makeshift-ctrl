@@ -50,7 +50,7 @@ test('ArtworkAssetStore invalidates a provider prefix without discarding other a
 })
 
 test('keyed cache packet contract matches the firmware MessageType enum', () => {
-  assert.equal(CACHE_PROTOCOL_VERSION, 3)
+  assert.equal(CACHE_PROTOCOL_VERSION, 4)
   assert.deepEqual(CACHE_PACKET_TYPES, {
     begin: 27,
     chunk: 28,
@@ -60,10 +60,10 @@ test('keyed cache packet contract matches the firmware MessageType enum', () => 
 })
 
 test('typed capability packets are parsed without debug-text negotiation', () => {
-  const packet = Buffer.from([PROTOCOL.capabilityPacket, 1, 8, 0xfe, 0x1f, 8, 7, 0, 0xf0, 3, 1, 0, 240, 0, 1, 94, 0])
+  const packet = Buffer.from([PROTOCOL.capabilityPacket, 1, 8, 0xfe, 0x1f, 8, 7, 0, 0xf0, 4, 1, 0, 240, 0, 1, 94, 0])
   assert.deepEqual(parseDeviceCapabilities(packet), {
     runtimeProtocol: 1, maxComponents: 8, maxAssets: 8, cacheSlots: 7,
-    cacheProtocol: 3, featureBits: 1, packetBodyLimit: 240, cacheBytes: 89600,
+    cacheProtocol: 4, featureBits: 1, packetBodyLimit: 240, cacheBytes: 89600,
   })
 })
 
