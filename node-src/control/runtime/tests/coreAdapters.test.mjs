@@ -7,6 +7,7 @@ import {
 } from '../artworkCore.mjs'
 import { CarouselSessionCoordinator } from '../carouselSessionCoordinator.mjs'
 import { CACHE_PACKET_TYPES, CACHE_PROTOCOL_VERSION } from '../cacheProtocol.mjs'
+import { parseDeviceCapabilities, PROTOCOL } from '../protocolSchema.mjs'
 import { ProtocolAckTracker } from '../protocolAckTracker.mjs'
 import { createLegacyDirectArtTransport } from '../legacyDirectArtTransport.mjs'
 import { SerialLifecycle } from '../serialLifecycle.mjs'
@@ -55,6 +56,14 @@ test('keyed cache packet contract matches the firmware MessageType enum', () => 
     chunk: 28,
     commit: 29,
     bind: 30,
+  })
+})
+
+test('typed capability packets are parsed without debug-text negotiation', () => {
+  const packet = Buffer.from([PROTOCOL.capabilityPacket, 1, 8, 0xfe, 0x1f, 8, 7, 0, 0xf0, 3, 1, 0, 240, 0, 1, 94, 0])
+  assert.deepEqual(parseDeviceCapabilities(packet), {
+    runtimeProtocol: 1, maxComponents: 8, maxAssets: 8, cacheSlots: 7,
+    cacheProtocol: 3, featureBits: 1, packetBodyLimit: 240, cacheBytes: 89600,
   })
 })
 

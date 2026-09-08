@@ -11,6 +11,7 @@ import { ArtworkAssetStore, ArtworkTransferScheduler, LegacyArtworkResidency } f
 import { createLegacyDirectArtTransport } from './legacyDirectArtTransport.mjs'
 import { CarouselSessionCoordinator } from './carouselSessionCoordinator.mjs'
 import { CACHE_PACKET_TYPES, CACHE_PROTOCOL_VERSION } from './cacheProtocol.mjs'
+import { PROTOCOL, parseDeviceCapabilities } from './protocolSchema.mjs'
 import { ProtocolAckTracker } from './protocolAckTracker.mjs'
 import { WireScheduler } from './wireScheduler.mjs'
 import { SerialLifecycle } from './serialLifecycle.mjs'
@@ -346,6 +347,7 @@ const legacyDirectArtTransport = createLegacyDirectArtTransport({
 })
 let advertisedDeviceCacheBytes = 256 * 1024
 let deviceCacheProtocolVersion = 0
+let deviceCapabilities = null
 const firmwareAcks = new ProtocolAckTracker()
 
 function deviceAssetKey(name) {
@@ -2952,6 +2954,17 @@ function attachPort(fp) {
   activePort = port
   const parseFirmwarePacket = port.parseSlipPacketHeader.bind(port)
   port.parseSlipPacketHeader = packet => {
+    const capabilities = parseDeviceCapabilities(packet)
+    if (capabilities) {
+      deviceCapabilities = capabilities
+      deviceCacheProtocolVersion = capabilities.cacheProtocol
+      advertisedDeviceCacheBytes = capabilities.cacheBytes
+      report('device-capabilities', capabilities)
+      if (deviceCacheProtocolVersion >= CACHE_PROTOCOL_VERSION) {
+        void primeDeviceCarouselArtwork().catch(error =>
+          report('device-carousel-artwork-prime-error', { message: String(error) }))
+      }
+    }
     // The bundled serial wrapper logs ERROR but discards its request/error
     // bytes. Preserve them here so cache faults can be diagnosed remotely.
     if (packet?.[0] === 4) {
@@ -3027,7 +3040,7 @@ function attachPort(fp) {
     } else if (message.startsWith('MKSHFT_LED ')) {
       indicatorSupported = /\bindicator=1\b/.test(message)
       syncMediaSourceIndicator()
-    } else if (message.startsWith('MKSHFT_CACHE ')) {
+    } else if (message.startsWith('MKSHFT_CACHE ') && !deviceCapabilities) {
       const bytes = Number(/\bbytes=(\d+)/.exec(message)?.[1])
       const protocol = Number(/\bprotocol=(\d+)/.exec(message)?.[1])
       if (Number.isInteger(bytes) && bytes > 0) {
@@ -3136,6 +3149,7 @@ function detachPort() {
   legacyArtworkResidency.reset()
   deviceAssetKeys.clear()
   deviceCacheProtocolVersion = 0
+  deviceCapabilities = null
   indicatorSupported = false
   initialArtworkQueued = false
   carouselSessions.clear()
