@@ -267,6 +267,7 @@ let mappings = new Map()
 let modules = new Map()
 const cuePluginRegistry = new Map()
 let activePort
+let activeDeviceFingerprint = null
 let games = []
 let shuttingDown = false
 let coreStarted = false
@@ -2990,6 +2991,11 @@ function attachPort(fp) {
   const port = serial.Ports[fp.deviceSerial]
   const connectionId = ++deviceConnectionId
   activePort = port
+  activeDeviceFingerprint = {
+    devicePath: String(fp.devicePath ?? ''),
+    portId: String(fp.portId ?? ''),
+    deviceSerial: String(fp.deviceSerial ?? ''),
+  }
   const parseFirmwarePacket = port.parseSlipPacketHeader.bind(port)
   port.parseSlipPacketHeader = packet => {
     const capabilities = parseDeviceCapabilities(packet)
@@ -3183,6 +3189,7 @@ function detachPort() {
   buttonGestures.clear()
   relativeSeek.clear()
   activePort = undefined
+  activeDeviceFingerprint = null
   firmwareAcks.clear()
   legacyArtworkResidency.reset()
   deviceAssetKeys.clear()
@@ -3389,6 +3396,7 @@ export function getCoreStatus() {
     core: true,
     started: coreStarted,
     connected: Boolean(activePort),
+    device: activeDeviceFingerprint,
     firmwareUpdateInProgress,
     serial: serialLifecycle.snapshot(),
     cueCount: modules.size,

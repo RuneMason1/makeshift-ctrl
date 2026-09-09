@@ -6,6 +6,7 @@ export type CoreBridgeStatus = Readonly<{
   attached: boolean
   core: boolean
   connected: boolean
+  device: Readonly<{ devicePath: string, portId: string, deviceSerial: string }> | null
   firmwareUpdateInProgress: boolean
   serial: Readonly<{ started: boolean, yielded: boolean, recoveryPending: boolean }>
   cueCount: number
@@ -73,6 +74,13 @@ export function readCoreStatus(timeoutMs = 750): Promise<CoreBridgeStatus> {
         const status = reply?.ok === true ? reply.result : undefined
         finish({ attached: true, core: Boolean(status.core), connected: Boolean(status.connected),
           firmwareUpdateInProgress: Boolean(status.firmwareUpdateInProgress),
+          device: status.device && typeof status.device === 'object'
+            ? {
+                devicePath: String(status.device.devicePath ?? ''),
+                portId: String(status.device.portId ?? ''),
+                deviceSerial: String(status.device.deviceSerial ?? ''),
+              }
+            : null,
           serial: {
             started: Boolean(status.serial?.started),
             yielded: Boolean(status.serial?.yielded),
@@ -83,16 +91,19 @@ export function readCoreStatus(timeoutMs = 750): Promise<CoreBridgeStatus> {
       } catch {
         finish({ attached: false, core: false, connected: false, firmwareUpdateInProgress: false,
           cueCount: 0, mappingCount: 0,
+          device: null,
           serial: { started: false, yielded: false, recoveryPending: false },
           reason: 'Core returned an invalid status response' })
       }
     })
     socket.on('timeout', () => finish({ attached: false, core: false, connected: false,
       firmwareUpdateInProgress: false, cueCount: 0, mappingCount: 0,
+      device: null,
       serial: { started: false, yielded: false, recoveryPending: false },
       reason: 'Core status request timed out' }))
     socket.on('error', () => finish({ attached: false, core: false, connected: false,
       firmwareUpdateInProgress: false, cueCount: 0, mappingCount: 0,
+      device: null,
       serial: { started: false, yielded: false, recoveryPending: false },
       reason: 'Core host is unavailable' }))
   })

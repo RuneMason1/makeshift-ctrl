@@ -2,6 +2,11 @@ export type CoreBridgeStatus = Readonly<{
     attached: boolean;
     core: boolean;
     connected: boolean;
+    device: Readonly<{
+        devicePath: string;
+        portId: string;
+        deviceSerial: string;
+    }> | null;
     firmwareUpdateInProgress: boolean;
     serial: Readonly<{
         started: boolean;

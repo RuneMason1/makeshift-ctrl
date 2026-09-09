@@ -1,3 +1,4 @@
+import { MakeShiftPortFingerprint } from '@eos-makeshift/serial';
 import { Cue } from 'types/electron/main/cues';
 export type SensorEventDetails = {
     sensorId: number;
@@ -8,6 +9,7 @@ export type CoreStatus = {
     attached: boolean;
     core: boolean;
     connected: boolean;
+    device: MakeShiftPortFingerprint | null;
     firmwareUpdateInProgress: boolean;
     serial: {
         started: boolean;

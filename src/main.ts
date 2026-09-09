@@ -16,6 +16,7 @@ export type CoreStatus = {
   attached: boolean,
   core: boolean,
   connected: boolean,
+  device: MakeShiftPortFingerprint | null,
   firmwareUpdateInProgress: boolean,
   serial: { started: boolean, yielded: boolean, recoveryPending: boolean },
   cueCount: number,
@@ -65,6 +66,16 @@ const cueRoot: Folder = {
     coreStatus: ref(await window.MakeShiftCtrl.get.coreStatus()) as Ref<CoreStatus>,
   }
 
+  function syncCoreDevice(status: CoreStatus) {
+    if (!status.connected || !status.device?.deviceSerial) {
+      state.connectedDevices.value = []
+      state.currentDevice.value = dcDevice
+      return
+    }
+    state.connectedDevices.value = [status.device]
+    state.currentDevice.value = status.device
+  }
+
   console.log(Constants.HardwareDescriptors)
 
   // Start on the first configured control so an existing assignment is
@@ -81,8 +92,11 @@ const cueRoot: Folder = {
   state.selectedView.value = await window.MakeShiftCtrl.get.currentView()
 
   // Read-only attachment to the existing Core host. Ctrl never claims COM3.
+  syncCoreDevice(state.coreStatus.value)
   setInterval(async () => {
-    state.coreStatus.value = await window.MakeShiftCtrl.get.coreStatus()
+    const status = await window.MakeShiftCtrl.get.coreStatus()
+    state.coreStatus.value = status
+    syncCoreDevice(status)
   }, 2000)
 
   // console.log(`initial selected event: ${state.selectedEvent}`)
@@ -95,13 +109,8 @@ const cueRoot: Folder = {
     // console.log(`selected event cues: ${state.selectedEventCues.value}`)
   })
 
-  const initialDevices = await window.MakeShiftCtrl.get.connectedDevices()
-
-  // Set up event hooks for device connections
-  state.connectedDevices.value = initialDevices
-  if (initialDevices.length > 0) {
-    state.currentDevice.value = initialDevices[0]
-  }
+  // Core supplies the authoritative connected-device snapshot. Legacy event
+  // listeners below only populate the explicit legacy serial editor mode.
 
   window.MakeShiftCtrl.onEv.device.connected((newfp: MakeShiftPortFingerprint) => {
     if (state.connectedDevices.value.length === 0) {
