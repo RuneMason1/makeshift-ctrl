@@ -2447,16 +2447,23 @@ function loadProfile() {
   loadHomeAssistantConfig()
   registerBuiltInCuePlugins()
   loadUserCuePlugins()
-  const config = JSON.parse(readFileSync(configPath, 'utf8'))
-  visualPreferences = normalizeVisualPreferences(config?.visualPreferences)
+  let config
+  try {
+    config = JSON.parse(readFileSync(configPath, 'utf8'))
+  } catch (error) {
+    report('profile-reload-rejected', { message: `Invalid config: ${String(error)}` })
+    return false
+  }
+  const nextVisualPreferences = normalizeVisualPreferences(config?.visualPreferences)
   const layer = config?.deviceLayout?.layers?.[0] ?? []
-  mappings = new Map(layer.map(([eventName, cueId]) => [eventName, cueId.replaceAll('\\', '/')]))
-  modules.clear()
+  const nextMappings = new Map(layer.map(([eventName, cueId]) =>
+    [eventName, cueId.replaceAll('\\', '/')]))
+  const nextModules = new Map()
   // The firmware retains its current collection across a profile reload. Keep
   // the matching host session so select/activate events remain actionable.
   const retainedCarousel = carouselSessions.active
 
-  for (const cueId of new Set(mappings.values())) {
+  for (const cueId of new Set(nextMappings.values())) {
     const cuePath = join(cuesRoot, ...cueId.split('/'))
     try {
       delete requireFromCtrl.cache?.[requireFromCtrl.resolve(cuePath)]
@@ -2464,11 +2471,16 @@ function loadProfile() {
       cue.plugins ??= {}
       installCuePlugins(cue, cueId)
       cue.setup?.()
-      modules.set(cueId, cue)
+      nextModules.set(cueId, cue)
     } catch (error) {
-      report('cue-error', { cueId, message: String(error) })
+      report('profile-reload-rejected', { cueId, message: String(error) })
+      return false
     }
   }
+  visualPreferences = nextVisualPreferences
+  mappings = nextMappings
+  modules.clear()
+  for (const [cueId, cue] of nextModules) modules.set(cueId, cue)
   report('reloaded', {
     cueCount: modules.size,
     mappingCount: mappings.size,
@@ -2477,6 +2489,7 @@ function loadProfile() {
   })
   void refreshHomeAssistantMediaPlayer().catch(error =>
     report('home-assistant-media-refresh-error', { message: String(error) }))
+  return true
 }
 
 function normalizeVisualColor(value, fallback) {
