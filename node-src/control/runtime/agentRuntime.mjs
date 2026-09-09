@@ -3011,6 +3011,14 @@ async function initializeDeviceSession(port, connectionId) {
   if (results[1].status === 'rejected') {
     report('runtime-asset-sync-error', { message: String(results[1].reason) })
   }
+  // A Teensy can enumerate twice during a cold reconnect. If the first
+  // status batch raced that transient disconnect, resend it after the port
+  // has had time to settle without delaying the initial parallel dispatch.
+  setTimeout(() => {
+    if (isCurrentDeviceSession(port, connectionId)) {
+      void preloadActiveStatusZones()
+    }
+  }, 750).unref()
   lastNowPlaying = ''
   refreshPandoraNowPlaying()
   await new Promise(resolve => setTimeout(resolve, 100))
