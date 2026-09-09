@@ -2382,7 +2382,7 @@ function publishNowPlaying() {
   report('now-playing', nowPlayingState)
   if (!activePort) return
   const body = Buffer.from(text || oldText, 'utf8').subarray(0, 159)
-  activePort.sendPacket(NOW_PLAYING, Buffer.concat([
+  void queueDevicePacket(activePort, NOW_PLAYING, Buffer.concat([
     Buffer.from([showingSource || track ? 1 : 0]), body,
   ]))
 }
@@ -2500,7 +2500,7 @@ function visualColorBytes(value) {
 
 function syncVisualPreferences(port = activePort) {
   if (!port || !visualPreferences) return
-  port.sendPacket(DEVICE_VISUALS, Buffer.from([
+  void queueDevicePacket(port, DEVICE_VISUALS, Buffer.from([
     1,
     visualPreferences.splashImageId,
     ...visualColorBytes(visualPreferences.ledColor),
@@ -2528,7 +2528,7 @@ function collectionInputBinding() {
 function syncCollectionInputBinding(port = activePort) {
   const binding = collectionInputBinding()
   if (!port || !binding) return
-  port.sendPacket(COLLECTION_INPUT_BINDING,
+  void queueDevicePacket(port, COLLECTION_INPUT_BINDING,
     Buffer.from([binding.dialIndex, binding.buttonIndex]))
 }
 
@@ -2612,7 +2612,7 @@ async function runCue(eventData) {
   }
   const glyphId = runtimeAssetForName(cue.glyph, cue)?.id ?? OVERLAY_GLYPHS.get(cue.glyph)
   if (glyphId && activePort) {
-    activePort.sendPacket(ACTION_GLYPH, Buffer.from([glyphId]))
+    void queueDevicePacket(activePort, ACTION_GLYPH, Buffer.from([glyphId]), { priority: 0 })
     report('cue-glyph', { cueId, input: eventData.event, glyph: cue.glyph })
   }
   try {
@@ -2919,7 +2919,7 @@ function isCurrentDeviceSession(port, connectionId) {
 async function syncGameList(port, connectionId) {
   if (games.length === 0) return true
   if (!isCurrentDeviceSession(port, connectionId) ||
-      !port.sendPacket(GAME_LIST_BEGIN, Buffer.from([games.length]))) return false
+      !await queueDevicePacket(port, GAME_LIST_BEGIN, Buffer.from([games.length]), { priority: 0 })) return false
   for (const game of games) {
     if (!isCurrentDeviceSession(port, connectionId)) return false
     const appId = Buffer.from(game.appId, 'ascii')
@@ -2929,10 +2929,11 @@ async function syncGameList(port, connectionId) {
     body[1] = title.length
     appId.copy(body, 2)
     title.copy(body, 2 + appId.length)
-    if (!port.sendPacket(GAME_LIST_ITEM, body)) return false
+    if (!await queueDevicePacket(port, GAME_LIST_ITEM, body, { priority: 0 })) return false
     await new Promise(resolve => setTimeout(resolve, INITIAL_PACKET_GAP_MS))
   }
-  return isCurrentDeviceSession(port, connectionId) && port.sendPacket(GAME_LIST_COMMIT)
+  return isCurrentDeviceSession(port, connectionId) &&
+    await queueDevicePacket(port, GAME_LIST_COMMIT, Buffer.alloc(0), { priority: 0 })
 }
 
 function createSteamCarouselSession(input) {
@@ -2998,7 +2999,7 @@ async function initializeDeviceSession(port, connectionId) {
   if (!isCurrentDeviceSession(port, connectionId)) return
   // Only protocol-v2 firmware emits the cache capability line. Until then,
   // artwork remains on the proven legacy transfer path.
-  port.sendPacket(RUNTIME_CAPABILITIES)
+  await queueDevicePacket(port, RUNTIME_CAPABILITIES, Buffer.alloc(0), { priority: 0 })
   await new Promise(resolve => setTimeout(resolve, 25))
   if (!isCurrentDeviceSession(port, connectionId)) return
   if (!await syncRuntimeAssets(port, connectionId)) return
