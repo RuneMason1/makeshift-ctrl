@@ -10,6 +10,7 @@ import { CACHE_PACKET_TYPES, CACHE_PROTOCOL_VERSION } from '../cacheProtocol.mjs
 import { parseDeviceCapabilities, PROTOCOL } from '../protocolSchema.mjs'
 import { ProtocolAckTracker } from '../protocolAckTracker.mjs'
 import { createLegacyDirectArtTransport } from '../legacyDirectArtTransport.mjs'
+import { createArtworkTransport } from '../artworkTransport.mjs'
 import { SerialLifecycle } from '../serialLifecycle.mjs'
 import { WireScheduler } from '../wireScheduler.mjs'
 
@@ -202,6 +203,24 @@ test('LegacyDirectArtTransport aborts a stale transfer before commit', async () 
   })
   assert.equal(sent, false)
   assert.deepEqual(packets, [7, 8])
+})
+
+test('ArtworkTransport selects the firmware-advertised transport without provider branching', async () => {
+  const calls = []
+  const keyedTransport = createArtworkTransport({
+    supportsKeyedCache: () => true,
+    sendKeyed: async value => { calls.push(['keyed', value.itemIndex]); return true },
+    sendDirect: async value => { calls.push(['direct', value.itemIndex]); return true },
+  })
+  const request = { port: {}, session: {}, slot: 2, itemIndex: 3, title: 'Test', artwork: {}, isCurrent: () => true }
+  assert.equal(await keyedTransport.send(request), true)
+  const directTransport = createArtworkTransport({
+    supportsKeyedCache: () => false,
+    sendKeyed: async value => { calls.push(['unexpected-keyed', value.itemIndex]); return true },
+    sendDirect: async value => { calls.push(['direct', value.itemIndex]); return true },
+  })
+  assert.equal(await directTransport.send(request), true)
+  assert.deepEqual(calls, [['keyed', 3], ['direct', 3]])
 })
 
 test('SerialLifecycle cleans up listeners across stop', () => {

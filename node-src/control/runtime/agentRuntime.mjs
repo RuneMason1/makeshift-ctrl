@@ -8,6 +8,7 @@ import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import readline from 'node:readline'
 import { ArtworkAssetStore, ArtworkTransferScheduler, LegacyArtworkResidency } from './artworkCore.mjs'
+import { createArtworkTransport } from './artworkTransport.mjs'
 import { createLegacyDirectArtTransport } from './legacyDirectArtTransport.mjs'
 import { CarouselSessionCoordinator } from './carouselSessionCoordinator.mjs'
 import { CACHE_PACKET_TYPES, CACHE_PROTOCOL_VERSION } from './cacheProtocol.mjs'
@@ -344,6 +345,20 @@ const legacyDirectArtTransport = createLegacyDirectArtTransport({
   packetTypes: { begin: GAME_CARD_BEGIN, chunk: GAME_ART_CHUNK, commit: GAME_CARD_COMMIT },
   report,
 })
+const artworkTransport = createArtworkTransport({
+  supportsKeyedCache: () => deviceCacheProtocolVersion >= CACHE_PROTOCOL_VERSION,
+  sendKeyed: async ({ port, session, itemIndex, artwork, isCurrent }) => {
+    const key = await ensureDeviceAsset(artwork.assetKey, artwork.bytes)
+    if (!isCurrent()) return false
+    const bind = Buffer.allocUnsafe(5)
+    bind.writeUInt32BE(key, 0)
+    bind[4] = itemIndex
+    await sendConfirmedCachePacket(port, CACHE_FILE_BIND, bind)
+    return true
+  },
+  sendDirect: ({ port, session, slot, itemIndex, title, artwork, isCurrent }) =>
+    sendDirectArtwork(port, session, slot, itemIndex, title, artwork.bytes, isCurrent),
+})
 let advertisedDeviceCacheBytes = 256 * 1024
 let deviceCacheProtocolVersion = 0
 let deviceCapabilities = null
@@ -434,25 +449,19 @@ function queueDirectArtwork(session, slot, itemIndex, title, artwork, priority =
       try {
         const port = activePort
         if (!isCurrentCarouselTransfer(session, port)) return false
-        if (deviceCacheProtocolVersion >= CACHE_PROTOCOL_VERSION) {
-          // The artwork store key already includes the provider identity and
-          // content revision. Reuse it so boot priming and carousel binding
-          // address the identical firmware cache entry.
-          const key = await ensureDeviceAsset(assetKey, lease.bytes)
-          if (!isCurrentCarouselTransfer(session, port)) return false
-          const bind = Buffer.allocUnsafe(5)
-          bind.writeUInt32BE(key, 0)
-          bind[4] = itemIndex
-          await sendConfirmedCachePacket(port, CACHE_FILE_BIND, bind)
-          return true
-        }
-        return await sendDirectArtwork(port, session, slot, itemIndex, title, lease.bytes)
+        // The provider only supplies an asset and logical item. Firmware
+        // protocol selection belongs to the transport adapter.
+        return await artworkTransport.send({
+          port, session, slot, itemIndex, title,
+          artwork: { assetKey, bytes: lease.bytes },
+          isCurrent: () => isCurrentCarouselTransfer(session, port),
+        })
       } finally {
         lease.release()
       }
     },
   }).catch(error => {
-    report('direct-artwork-transfer-error', {
+    report('artwork-transfer-error', {
       sessionId: session?.wireSessionId ?? null, itemIndex, message: String(error),
     })
     return false
