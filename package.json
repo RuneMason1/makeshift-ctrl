@@ -47,6 +47,7 @@
     "electron-store": "^11.0.2",
     "fs-extra": "^11.4.0",
     "highlight.js": "^11.11.1",
+    "jsdom": "29.1.1",
     "nanoid": "^6.0.1",
     "octokit": "^5.0.5",
     "pathe": "^2.0.3",
