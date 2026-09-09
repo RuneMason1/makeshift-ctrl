@@ -2995,16 +2995,22 @@ async function initializeDeviceSession(port, connectionId) {
   if (!isCurrentDeviceSession(port, connectionId)) return
 
   syncVisualPreferences(port)
-  await new Promise(resolve => setTimeout(resolve, 25))
+  // These startup operations are independent. Dispatch them together so the
+  // home-screen zones become visible as one initial state instead of waiting
+  // behind glyph/art uploads or artificial inter-packet delays.
+  const capabilitySync = queueDevicePacket(port, RUNTIME_CAPABILITIES,
+    Buffer.alloc(0), { priority: 0 })
+  const runtimeAssetSync = syncRuntimeAssets(port, connectionId)
+  const statusSync = preloadActiveStatusZones()
+  const results = await Promise.allSettled([capabilitySync, runtimeAssetSync, statusSync])
   if (!isCurrentDeviceSession(port, connectionId)) return
-  // Only protocol-v2 firmware emits the cache capability line. Until then,
-  // artwork remains on the proven legacy transfer path.
-  await queueDevicePacket(port, RUNTIME_CAPABILITIES, Buffer.alloc(0), { priority: 0 })
-  await new Promise(resolve => setTimeout(resolve, 25))
-  if (!isCurrentDeviceSession(port, connectionId)) return
-  if (!await syncRuntimeAssets(port, connectionId)) return
-  await preloadActiveStatusZones()
-  if (!isCurrentDeviceSession(port, connectionId)) return
+  if (results[1].status === 'fulfilled' && results[1].value === false) return
+  if (results[0].status === 'rejected') {
+    report('runtime-capability-sync-error', { message: String(results[0].reason) })
+  }
+  if (results[1].status === 'rejected') {
+    report('runtime-asset-sync-error', { message: String(results[1].reason) })
+  }
   lastNowPlaying = ''
   refreshPandoraNowPlaying()
   await new Promise(resolve => setTimeout(resolve, 100))
