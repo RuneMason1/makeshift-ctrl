@@ -1877,6 +1877,31 @@ function installCuePlugins(cue, cueId) {
   }
 }
 
+function disposeCue(cue, cueId) {
+  const disposables = Object.values(cue?.plugins ?? {})
+    .filter(plugin => typeof plugin?.dispose === 'function')
+  for (const plugin of disposables) {
+    try {
+      void Promise.resolve(plugin.dispose()).catch(error =>
+        report('cue-dispose-error', { cueId, message: String(error) }))
+    } catch (error) {
+      report('cue-dispose-error', { cueId, message: String(error) })
+    }
+  }
+  if (typeof cue?.dispose === 'function') {
+    try {
+      void Promise.resolve(cue.dispose()).catch(error =>
+        report('cue-dispose-error', { cueId, message: String(error) }))
+    } catch (error) {
+      report('cue-dispose-error', { cueId, message: String(error) })
+    }
+  }
+}
+
+function disposeCueSet(cues) {
+  for (const [cueId, cue] of cues) disposeCue(cue, cueId)
+}
+
 function selectedHomeAssistantLight() {
   if (!homeAssistantConfig || homeAssistantLightIndex < 0) return undefined
   return homeAssistantConfig.lights[homeAssistantLightIndex]
@@ -2474,13 +2499,16 @@ function loadProfile() {
       nextModules.set(cueId, cue)
     } catch (error) {
       report('profile-reload-rejected', { cueId, message: String(error) })
+      disposeCueSet(nextModules)
       return false
     }
   }
+  const previousModules = new Map(modules)
   visualPreferences = nextVisualPreferences
   mappings = nextMappings
   modules.clear()
   for (const [cueId, cue] of nextModules) modules.set(cueId, cue)
+  disposeCueSet(previousModules)
   report('reloaded', {
     cueCount: modules.size,
     mappingCount: mappings.size,
