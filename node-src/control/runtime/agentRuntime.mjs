@@ -271,6 +271,7 @@ let activeDeviceFingerprint = null
 let games = []
 let shuttingDown = false
 let coreStarted = false
+let coreInput
 let carouselSourceRefresh
 const coreTimers = []
 const coreWatchers = []
@@ -2422,6 +2423,7 @@ function refreshPandoraNowPlaying() {
 }
 
 function startMediaSessionReader() {
+  if (shuttingDown || !coreStarted) return
   mediaSessionReader = spawn('powershell.exe', [
     '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', mediaSessionReaderPath,
   ], { windowsHide: true })
@@ -2464,7 +2466,7 @@ function startMediaSessionReader() {
     reportRuntimeError('media-session-reader', data.toString().trim()))
   mediaSessionReader.on('exit', () => {
     mediaSessionReader = undefined
-    if (!shuttingDown) setTimeout(startMediaSessionReader, 2000).unref()
+    if (!shuttingDown && coreStarted) setTimeout(startMediaSessionReader, 2000).unref()
   })
 }
 
@@ -3468,6 +3470,8 @@ export async function stopCore({ exitProcess = false } = {}) {
   coreTimers.length = 0
   for (const watcher of coreWatchers) watcher.close()
   coreWatchers.length = 0
+  coreInput?.close()
+  coreInput = undefined
   if (server.listening) server.close()
   coreStarted = false
   report('stopped')
@@ -3651,7 +3655,8 @@ export async function startCore() {
     }))
   }
 
-  readline.createInterface({ input: process.stdin }).on('line', line => {
+  coreInput = readline.createInterface({ input: process.stdin })
+  coreInput.on('line', line => {
     const command = line.trim()
     if (command === 'reload') reloadCore()
     else if (command === 'shutdown') void stopCore({ exitProcess: true })
