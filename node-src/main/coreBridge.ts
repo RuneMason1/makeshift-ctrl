@@ -40,6 +40,15 @@ export function flashCoreFirmware() {
   return requestCore<{ ok: boolean, reason?: string, message?: string }>('firmware.flash', 150000)
 }
 
+/** Ctrl's tray controls ask the existing Core owner to release or reclaim serial. */
+export function yieldCoreSerial() {
+  return requestCore<{ started: boolean }>('serial.yield', 3000)
+}
+
+export function resumeCoreSerial() {
+  return requestCore<{ started: boolean }>('serial.resume', 3000)
+}
+
 /** Read-only bridge to the active Core host. Ctrl never opens the serial port. */
 export function readCoreStatus(timeoutMs = 750): Promise<CoreBridgeStatus> {
   return new Promise(resolve => {

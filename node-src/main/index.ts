@@ -86,7 +86,7 @@ import { Fileio } from './fileio'
 import { DeviceRuntimeManifest } from './deviceRuntime'
 import { CollectionProviderRegistry } from './collectionProviderRegistry'
 import { collectionProviderCatalog } from './collectionProviderCatalog'
-import { flashCoreFirmware, readCoreStatus } from './coreBridge'
+import { flashCoreFirmware, readCoreStatus, resumeCoreSerial, yieldCoreSerial } from './coreBridge'
 
 
 let nanoid
@@ -261,6 +261,9 @@ const layout: Layout = {
 }
 
 let currentLayer = 0
+// Ctrl is a Core client by default. Direct serial access remains an explicit
+// editor-only compatibility mode until its event surfaces are fully bridged.
+const useLegacySerialEditor = process.env.MAKESHIFT_CTRL_LEGACY_SERIAL === '1'
 
 function getOpenPorts(): MakeShiftPort[] {
   return knownDeviceFingerprints
@@ -270,14 +273,20 @@ function getOpenPorts(): MakeShiftPort[] {
 
 async function pauseCtrlSerial() {
   if (serialPaused) {
-    return { paused: true, openPorts: getOpenPorts().length }
+    return { paused: true, openPorts: 0 }
   }
 
-  stopAutoScan()
-  const openPorts = getOpenPorts()
-  await Promise.all(openPorts.map((port) => Promise.resolve(port.close())))
+  if (useLegacySerialEditor) {
+    stopAutoScan()
+    const openPorts = getOpenPorts()
+    await Promise.all(openPorts.map((port) => Promise.resolve(port.close())))
+    serialPaused = true
+    return { paused: true, openPorts: openPorts.length }
+  }
+
+  await yieldCoreSerial()
   serialPaused = true
-  return { paused: true, openPorts: openPorts.length }
+  return { paused: true, openPorts: 0 }
 }
 
 async function resumeCtrlSerial() {
@@ -285,7 +294,8 @@ async function resumeCtrlSerial() {
     return { paused: false }
   }
 
-  startAutoScan()
+  if (useLegacySerialEditor) startAutoScan()
+  else await resumeCoreSerial()
   serialPaused = false
   return { paused: false }
 }
@@ -595,11 +605,14 @@ app.whenReady()
     })
     // loadingBarrier.push(loadLayouts())
 
-    PortAuthority.on(PortAuthorityEvents.port.opened, addKnownDevice)
-    PortAuthority.on(PortAuthorityEvents.port.closed, removeKnownDevice)
-
-    log.debug('Starting Port Authority')
-    startAutoScan()
+    if (useLegacySerialEditor) {
+      PortAuthority.on(PortAuthorityEvents.port.opened, addKnownDevice)
+      PortAuthority.on(PortAuthorityEvents.port.closed, removeKnownDevice)
+      log.debug('Starting legacy serial editor authority')
+      startAutoScan()
+    } else {
+      log.debug('Ctrl attached as a Core client; direct serial authority is disabled')
+    }
     log.debug('Awaiting loading barrier')
 
     // Start application when loading finishes
@@ -634,7 +647,7 @@ ipcMain.handle(Api.test, async (ev, workspace) => {
 // Handle app close
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    PortAuthority.removeAllListeners()
+    if (useLegacySerialEditor) PortAuthority.removeAllListeners()
     killPluginHost()
     app.quit()
   } // TODO: handle macos
