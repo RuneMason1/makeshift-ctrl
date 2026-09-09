@@ -14,7 +14,8 @@
     "postinstall": "node ./scripts/postinstall.mjs",
     "set-build": "node ./scripts/set-build.mjs",
     "typecheck": "npm run gen-api",
-    "test:core": "node --test node-src/control/runtime/tests/*.test.mjs"
+    "test:core": "node --test node-src/control/runtime/tests/*.test.mjs",
+    "check:release": "powershell -NoProfile -ExecutionPolicy Bypass -File ../.codex/verify-release-manifest.ps1"
   },
   "repository": {
     "type": "git",
