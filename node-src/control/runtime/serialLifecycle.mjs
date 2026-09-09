@@ -8,6 +8,7 @@ export class SerialLifecycle {
     this.yielded = false
     this.openedHandler = fingerprint => this.onOpened(fingerprint)
     this.closedHandler = () => this.onClosed()
+    this.recoveryTimer = null
   }
 
   start() {
@@ -23,6 +24,7 @@ export class SerialLifecycle {
 
   stop() {
     if (!this.started) return
+    this.cancelRecovery()
     this.serial.stopAutoScan()
     this.closeAuthorityPorts()
     this.serial.PortAuthority.off?.(this.serial.PortAuthorityEvents.port.opened, this.openedHandler)
@@ -56,8 +58,35 @@ export class SerialLifecycle {
     return true
   }
 
+  scheduleRecovery(reason, { delayMs = 150, beforeReset = () => {} } = {}) {
+    if (!this.started || this.yielded || this.recoveryTimer) return false
+    this.report('serial-recovery-scheduled', { reason, delayMs })
+    this.recoveryTimer = setTimeout(() => {
+      this.recoveryTimer = null
+      try {
+        beforeReset()
+        this.resetScan(reason)
+      } catch (error) {
+        this.report('serial-recovery-error', { reason, message: String(error) })
+      }
+    }, delayMs)
+    this.recoveryTimer.unref?.()
+    return true
+  }
+
+  cancelRecovery() {
+    if (!this.recoveryTimer) return false
+    clearTimeout(this.recoveryTimer)
+    this.recoveryTimer = null
+    return true
+  }
+
   snapshot() {
-    return Object.freeze({ started: this.started, yielded: this.yielded })
+    return Object.freeze({
+      started: this.started,
+      yielded: this.yielded,
+      recoveryPending: Boolean(this.recoveryTimer),
+    })
   }
 
   closeAuthorityPorts() {

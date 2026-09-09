@@ -246,3 +246,25 @@ test('SerialLifecycle delegates port cleanup to a capable authority', () => {
   lifecycle.yield()
   assert.deepEqual(calls, ['scan-start', 'scan-stop', 'authority-close-all'])
 })
+
+test('SerialLifecycle collapses concurrent recovery requests into one reset', async () => {
+  const calls = []
+  const serial = {
+    Ports: {},
+    PortAuthority: { on: () => {}, off: () => {} },
+    PortAuthorityEvents: { port: { opened: 'opened', closed: 'closed' } },
+    setLogLevel: () => {}, setPortAuthorityLogLevel: () => {},
+    startAutoScan: () => calls.push('scan-start'), stopAutoScan: () => calls.push('scan-stop'),
+    closeAllPorts: () => calls.push('close-all'),
+  }
+  const lifecycle = new SerialLifecycle({ serial, report: event => calls.push(event), onOpened: () => {}, onClosed: () => {} })
+  lifecycle.start()
+  assert.equal(lifecycle.scheduleRecovery('write-failure', { delayMs: 1, beforeReset: () => calls.push('detach') }), true)
+  assert.equal(lifecycle.scheduleRecovery('duplicate', { delayMs: 1 }), false)
+  assert.equal(lifecycle.snapshot().recoveryPending, true)
+  await new Promise(resolve => setTimeout(resolve, 10))
+  assert.equal(lifecycle.snapshot().recoveryPending, false)
+  assert.deepEqual(calls, [
+    'scan-start', 'serial-recovery-scheduled', 'detach', 'scan-stop', 'scan-start', 'serial-scan-reset',
+  ])
+})

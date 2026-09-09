@@ -273,7 +273,6 @@ let carouselSourceRefresh
 const coreTimers = []
 const coreWatchers = []
 let lastRuntimeErrorAt = 0
-let recoveryScheduled = false
 let artworkTimer
 let artworkTransferId = 0
 let artworkWorkerRunning = false
@@ -711,17 +710,14 @@ function reportRuntimeError(kind, error) {
     lastRuntimeErrorAt = now
     report('protocol-error', { kind, message })
   }
-  if (!recoveryScheduled && /COM port|GetOverlappedResult|SerialPort/i.test(message)) {
-    recoveryScheduled = true
+  if (/COM port|GetOverlappedResult|SerialPort/i.test(message)) {
     report('recovering', { reason: 'serial-write-failure' })
     if (process.env.MAKESHIFT_CORE_RUNTIME === '1') {
-      // V2 has no parent supervisor to restart it. Release stale connection
-      // state and restart discovery in-process after a USB write abort.
-      setTimeout(() => {
-        detachPort()
-        resetSerialScan('serial-write-failure')
-        recoveryScheduled = false
-      }, 150).unref()
+      // Core remains available while the lifecycle owner serializes teardown
+      // and discovery. Duplicate transport failures collapse into one reset.
+      serialLifecycle.scheduleRecovery('serial-write-failure', {
+        beforeReset: detachPort,
+      })
     } else {
       // The deployed legacy agent is supervised by the Systray widget.
       setTimeout(() => process.exit(3), 150).unref()
