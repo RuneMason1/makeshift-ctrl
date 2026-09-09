@@ -26,6 +26,19 @@ test('WireScheduler cancels queued work from an older connection epoch', async (
   assert.equal(await stale, false)
 })
 
+test('WireScheduler replaces queued work with the same semantic key', async () => {
+  const scheduler = new WireScheduler()
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  const first = scheduler.enqueue({ key: 'carousel/item', execute: async () => { await gate; return 'first' } })
+  const obsolete = scheduler.enqueue({ key: 'asset/item', replace: true, execute: async () => 'obsolete' })
+  const replacement = scheduler.enqueue({ key: 'asset/item', replace: true, execute: async () => 'replacement' })
+  release()
+  assert.equal(await first, 'first')
+  assert.equal(await obsolete, false)
+  assert.equal(await replacement, 'replacement')
+})
+
 test('ArtworkAssetStore coalesces and reuses preparation', async () => {
   const store = new ArtworkAssetStore()
   let calls = 0
