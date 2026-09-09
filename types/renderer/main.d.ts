@@ -9,6 +9,11 @@ export type CoreStatus = {
     core: boolean;
     connected: boolean;
     firmwareUpdateInProgress: boolean;
+    serial: {
+        started: boolean;
+        yielded: boolean;
+        recoveryPending: boolean;
+    };
     cueCount: number;
     mappingCount: number;
     activeCarousel?: {

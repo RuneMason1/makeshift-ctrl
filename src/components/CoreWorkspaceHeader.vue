@@ -2,7 +2,7 @@
 import { inject, type Ref } from 'vue'
 import type { View } from '../renderer'
 
-type CoreStatus = { attached: boolean; core: boolean; connected: boolean; firmwareUpdateInProgress: boolean; cueCount: number; mappingCount: number; activeCarousel?: { id: string; sessionId: number } | null; reason?: string }
+type CoreStatus = { attached: boolean; core: boolean; connected: boolean; firmwareUpdateInProgress: boolean; serial: { yielded: boolean; recoveryPending: boolean }; cueCount: number; mappingCount: number; activeCarousel?: { id: string; sessionId: number } | null; reason?: string }
 
 const selectedView = inject('selected-view') as Ref<View>
 const status = inject('core-status') as Ref<CoreStatus>
@@ -29,6 +29,8 @@ async function selectView(view: View) {
       <strong>{{ status.attached ? (status.connected ? 'Connected' : 'Ready') : 'Unavailable' }}</strong>
       <span v-if="status.attached" class="detail">{{ status.cueCount }} cues / {{ status.mappingCount }} mappings</span>
       <span v-if="status.firmwareUpdateInProgress" class="activity">Updating</span>
+      <span v-else-if="status.serial.recoveryPending" class="activity">Recovering</span>
+      <span v-else-if="status.serial.yielded" class="activity">Paused</span>
     </div>
   </header>
 </template>

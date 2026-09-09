@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { inject, type Ref } from 'vue'
 
-type CoreStatus = { attached: boolean; connected: boolean; firmwareUpdateInProgress: boolean; reason?: string }
+type CoreStatus = { attached: boolean; connected: boolean; firmwareUpdateInProgress: boolean; serial: { yielded: boolean; recoveryPending: boolean }; reason?: string }
 const status = inject('core-status') as Ref<CoreStatus>
 </script>
 
@@ -11,6 +11,8 @@ const status = inject('core-status') as Ref<CoreStatus>
     <span class="label">Core</span>
     <strong>{{ status.attached ? (status.connected ? 'Device connected' : 'Device idle') : 'Unavailable' }}</strong>
     <span v-if="status.firmwareUpdateInProgress" class="activity">Updating firmware</span>
+    <span v-else-if="status.serial.recoveryPending" class="activity">Recovering connection</span>
+    <span v-else-if="status.serial.yielded" class="activity">Serial paused</span>
     <span v-else-if="!status.attached && status.reason" class="reason">{{ status.reason }}</span>
   </aside>
 </template>

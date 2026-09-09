@@ -3390,6 +3390,7 @@ export function getCoreStatus() {
     started: coreStarted,
     connected: Boolean(activePort),
     firmwareUpdateInProgress,
+    serial: serialLifecycle.snapshot(),
     cueCount: modules.size,
     mappingCount: mappings.size,
     artworkStore: artworkAssetStore.snapshot(),

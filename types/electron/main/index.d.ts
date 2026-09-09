@@ -62,6 +62,11 @@ declare const ipcMainGetHandler: {
         core: boolean;
         connected: boolean;
         firmwareUpdateInProgress: boolean;
+        serial: Readonly<{
+            started: boolean;
+            yielded: boolean;
+            recoveryPending: boolean;
+        }>;
         cueCount: number;
         mappingCount: number;
         activeCarousel?: Readonly<{

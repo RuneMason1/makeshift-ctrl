@@ -7,6 +7,7 @@ export type CoreBridgeStatus = Readonly<{
   core: boolean
   connected: boolean
   firmwareUpdateInProgress: boolean
+  serial: Readonly<{ started: boolean, yielded: boolean, recoveryPending: boolean }>
   cueCount: number
   mappingCount: number
   activeCarousel?: Readonly<{ id: string; sessionId: number }> | null
@@ -72,19 +73,27 @@ export function readCoreStatus(timeoutMs = 750): Promise<CoreBridgeStatus> {
         const status = reply?.ok === true ? reply.result : undefined
         finish({ attached: true, core: Boolean(status.core), connected: Boolean(status.connected),
           firmwareUpdateInProgress: Boolean(status.firmwareUpdateInProgress),
+          serial: {
+            started: Boolean(status.serial?.started),
+            yielded: Boolean(status.serial?.yielded),
+            recoveryPending: Boolean(status.serial?.recoveryPending),
+          },
           cueCount: Number(status.cueCount) || 0, mappingCount: Number(status.mappingCount) || 0,
           activeCarousel: status.activeCarousel ?? null })
       } catch {
         finish({ attached: false, core: false, connected: false, firmwareUpdateInProgress: false,
           cueCount: 0, mappingCount: 0,
+          serial: { started: false, yielded: false, recoveryPending: false },
           reason: 'Core returned an invalid status response' })
       }
     })
     socket.on('timeout', () => finish({ attached: false, core: false, connected: false,
       firmwareUpdateInProgress: false, cueCount: 0, mappingCount: 0,
+      serial: { started: false, yielded: false, recoveryPending: false },
       reason: 'Core status request timed out' }))
     socket.on('error', () => finish({ attached: false, core: false, connected: false,
       firmwareUpdateInProgress: false, cueCount: 0, mappingCount: 0,
+      serial: { started: false, yielded: false, recoveryPending: false },
       reason: 'Core host is unavailable' }))
   })
 }
