@@ -272,6 +272,7 @@ let games = []
 let shuttingDown = false
 let coreStarted = false
 let coreInput
+let profileReloadTimer
 let carouselSourceRefresh
 const coreTimers = []
 const coreWatchers = []
@@ -3472,6 +3473,8 @@ export async function stopCore({ exitProcess = false } = {}) {
   coreWatchers.length = 0
   coreInput?.close()
   coreInput = undefined
+  clearTimeout(profileReloadTimer)
+  profileReloadTimer = undefined
   if (server.listening) server.close()
   coreStarted = false
   report('stopped')
@@ -3646,12 +3649,15 @@ export async function startCore() {
     coreTimers.push(timer)
   }
 
-  let reloadTimer
   for (const path of [configPath, cuesRoot, cuePluginRoot]) {
     if (!existsSync(path)) continue
     coreWatchers.push(watch(path, { recursive: path === cuesRoot }, () => {
-      clearTimeout(reloadTimer)
-      reloadTimer = setTimeout(loadProfile, 250)
+      if (!coreStarted || shuttingDown) return
+      clearTimeout(profileReloadTimer)
+      profileReloadTimer = setTimeout(() => {
+        profileReloadTimer = undefined
+        if (coreStarted && !shuttingDown) loadProfile()
+      }, 250)
     }))
   }
 
