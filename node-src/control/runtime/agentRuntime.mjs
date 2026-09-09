@@ -425,6 +425,23 @@ function queueWirePacket(port, type, body, { acknowledge = false } = {}) {
   })
 }
 
+// All ordinary device traffic shares the same connection-epoch writer as
+// cache traffic. The caller may continue without awaiting UI/status updates,
+// but stale packets are rejected before they reach a newly connected device.
+function queueDevicePacket(port, type, body = Buffer.alloc(0), { key, priority = 1, replace = false } = {}) {
+  const connectionId = deviceConnectionId
+  return wireScheduler.enqueue({
+    epoch: connectionId,
+    key: key ?? `${connectionId}/packet/${type}`,
+    priority,
+    replace,
+    execute: async () => {
+      if (port !== activePort || connectionId !== deviceConnectionId) return false
+      return sendCachePacket(port, type, body)
+    },
+  })
+}
+
 function isCurrentCarouselTransfer(session, port) {
   return carouselSessions.isActive(session) && activePort === port
 }
@@ -594,11 +611,15 @@ async function openCarouselSession(session, options = {}) {
     if (!isCurrent()) return false
     if (candidate.resetArtwork) await Promise.resolve(candidate.resetArtwork())
     if (!isCurrent()) return false
-    if (!port.sendPacket(GAME_LIST_BEGIN, Buffer.from([candidate.items.length]))) {
+    if (!await queueDevicePacket(port, GAME_LIST_BEGIN, Buffer.from([candidate.items.length]), {
+      key: `${candidate.wireSessionId}/list-begin`, priority: 0,
+    })) {
       throw new Error('Could not start carousel list transfer')
     }
     const presentation = options.presentation ?? candidate.presentation
-    if (!port.sendPacket(COLLECTION_PRESENTATION, collectionPresentation(presentation))) {
+    if (!await queueDevicePacket(port, COLLECTION_PRESENTATION, collectionPresentation(presentation), {
+      key: `${candidate.wireSessionId}/presentation`, priority: 0,
+    })) {
       throw new Error('Could not set carousel presentation')
     }
     for (const item of candidate.items) {
@@ -608,7 +629,9 @@ async function openCarouselSession(session, options = {}) {
       const body = Buffer.allocUnsafe(2 + itemId.length + title.length)
       body[0] = itemId.length; body[1] = title.length
       itemId.copy(body, 2); title.copy(body, 2 + itemId.length)
-      if (!port.sendPacket(GAME_LIST_ITEM, body)) throw new Error('Could not send carousel item')
+      if (!await queueDevicePacket(port, GAME_LIST_ITEM, body, {
+        key: `${candidate.wireSessionId}/item/${item.itemId}`, priority: 0,
+      })) throw new Error('Could not send carousel item')
     }
     if (!isCurrent()) return false
     if (deviceCacheProtocolVersion >= CACHE_PROTOCOL_VERSION) {
@@ -624,9 +647,13 @@ async function openCarouselSession(session, options = {}) {
         await sendConfirmedCachePacket(port, CACHE_FILE_BIND, bind)
       }
     }
-    if (!port.sendPacket(GAME_LIST_COMMIT) || port !== activePort ||
-        !port.sendPacket(COLLECTION_INPUT_BINDING,
-          Buffer.from([candidate.input.dial, candidate.input.button]))) {
+    if (!await queueDevicePacket(port, GAME_LIST_COMMIT, Buffer.alloc(0), {
+          key: `${candidate.wireSessionId}/list-commit`, priority: 0,
+        }) || port !== activePort ||
+        !await queueDevicePacket(port, COLLECTION_INPUT_BINDING,
+          Buffer.from([candidate.input.dial, candidate.input.button]), {
+            key: `${candidate.wireSessionId}/input-binding`, priority: 0,
+          })) {
       throw new Error('Could not open carousel')
     }
     return true
@@ -768,7 +795,7 @@ async function readGoXlrStatus() {
 function sendGoXlrStatus(adjusting, name, percent, muted = false) {
   if (!activePort) return
   const label = boundedTitle(name)
-  activePort.sendPacket(GOXLR_STATUS, Buffer.concat([
+  void queueDevicePacket(activePort, GOXLR_STATUS, Buffer.concat([
     Buffer.from([(adjusting ? 1 : 0) | (muted ? 2 : 0), Math.max(0, Math.min(100, percent))]), label,
   ]))
 }
@@ -776,7 +803,7 @@ function sendGoXlrStatus(adjusting, name, percent, muted = false) {
 function sendStatusBadge(zone, adjusting, name, percent, inactive = false) {
   if (!activePort) return
   const label = boundedTitle(name)
-  activePort.sendPacket(STATUS_BADGE, Buffer.concat([
+  void queueDevicePacket(activePort, STATUS_BADGE, Buffer.concat([
     Buffer.from([zone, (adjusting ? 1 : 0) | (inactive ? 2 : 0),
       Math.max(0, Math.min(100, percent))]),
     label,
@@ -804,7 +831,7 @@ function sendScreenZoneText(zone, value, options = {}) {
   const text = Buffer.from(String(value ?? ''), 'utf8').subarray(0, 159)
   if (text.length === 0) return clearScreenZone(canonical)
   const active = options.active === false ? 0 : 1
-  activePort.sendPacket(canonical === 'upper-text' ? NOW_PLAYING : SCREEN_ZONE,
+  void queueDevicePacket(activePort, canonical === 'upper-text' ? NOW_PLAYING : SCREEN_ZONE,
     Buffer.concat([canonical === 'upper-text'
       ? Buffer.from([active])
       : Buffer.from([SCREEN_ZONES[canonical], 1, active]), text]))
@@ -815,7 +842,7 @@ function sendScreenZoneAsset(zone, name, cue) {
   const canonical = requireScreenZoneCapability(zone, 'asset')
   const asset = runtimeAssetForName(name, cue)
   if (!activePort || !asset?.id) return false
-  activePort.sendPacket(canonical === 'center' ? ACTION_GLYPH : SCREEN_ZONE,
+  void queueDevicePacket(activePort, canonical === 'center' ? ACTION_GLYPH : SCREEN_ZONE,
     canonical === 'center' ? Buffer.from([asset.id])
       : Buffer.from([SCREEN_ZONES[canonical], 2, asset.id]))
   return true
@@ -831,7 +858,7 @@ function sendScreenZoneStatus(zone, status = {}) {
     sendStatusBadge(SCREEN_ZONES[canonical], Boolean(status.adjusting),
       String(status.label ?? ''), percent, Boolean(status.inactive))
   } else {
-    activePort.sendPacket(SCREEN_ZONE, Buffer.concat([
+    void queueDevicePacket(activePort, SCREEN_ZONE, Buffer.concat([
       Buffer.from([SCREEN_ZONES[canonical], 3, flags, percent]), label,
     ]))
   }
@@ -842,10 +869,10 @@ function clearScreenZone(zone) {
   const canonical = requireScreenZoneCapability(zone, 'clear')
   if (!activePort) return false
   if (canonical === 'upper-text') {
-    activePort.sendPacket(NOW_PLAYING, Buffer.from([0, 32]))
+    void queueDevicePacket(activePort, NOW_PLAYING, Buffer.from([0, 32]))
     return true
   }
-  activePort.sendPacket(SCREEN_ZONE, Buffer.from([SCREEN_ZONES[canonical], 0]))
+  void queueDevicePacket(activePort, SCREEN_ZONE, Buffer.from([SCREEN_ZONES[canonical], 0]))
   return true
 }
 
@@ -1707,9 +1734,9 @@ function flashCueLeds({ color = '#ff0000', durationMs = 500 } = {}) {
     duration >> 8,
     duration & 0xff,
   ])
-  const sent = activePort.sendPacket(LED_EFFECT, body)
-  report('led-effect', { effect: 'flash-all', color: `#${rgb.toLowerCase()}`, durationMs: duration, sent: Boolean(sent) })
-  return Boolean(sent)
+  void queueDevicePacket(activePort, LED_EFFECT, body, { priority: 0 })
+  report('led-effect', { effect: 'flash-all', color: `#${rgb.toLowerCase()}`, durationMs: duration, sent: true })
+  return true
 }
 
 const systemPlugin = Object.freeze({
