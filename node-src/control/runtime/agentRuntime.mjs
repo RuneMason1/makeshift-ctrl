@@ -273,6 +273,8 @@ let shuttingDown = false
 let coreStarted = false
 let coreInput
 let profileReloadTimer
+let statusRetryTimer
+let firmwareResetTimer
 let carouselSourceRefresh
 const coreTimers = []
 const coreWatchers = []
@@ -3075,7 +3077,9 @@ async function initializeDeviceSession(port, connectionId) {
   // A Teensy can enumerate twice during a cold reconnect. If the first
   // status batch raced that transient disconnect, resend it after the port
   // has had time to settle without delaying the initial parallel dispatch.
-  setTimeout(() => {
+  clearTimeout(statusRetryTimer)
+  statusRetryTimer = setTimeout(() => {
+    statusRetryTimer = undefined
     if (isCurrentDeviceSession(port, connectionId)) {
       void preloadActiveStatusZones()
     }
@@ -3474,7 +3478,11 @@ async function flashFirmware(prebuiltPath) {
   } finally {
     firmwareUpdateInProgress = false
     if (!serialResumed) resumeSerial()
-    setTimeout(() => resetSerialScan('post-firmware-update'), 5000).unref()
+    clearTimeout(firmwareResetTimer)
+    firmwareResetTimer = setTimeout(() => {
+      firmwareResetTimer = undefined
+      if (!shuttingDown) resetSerialScan('post-firmware-update')
+    }, 5000).unref()
   }
 }
 
@@ -3492,6 +3500,10 @@ export async function stopCore({ exitProcess = false } = {}) {
   coreInput = undefined
   clearTimeout(profileReloadTimer)
   profileReloadTimer = undefined
+  clearTimeout(statusRetryTimer)
+  statusRetryTimer = undefined
+  clearTimeout(firmwareResetTimer)
+  firmwareResetTimer = undefined
   if (server.listening) server.close()
   coreStarted = false
   report('stopped')
