@@ -3082,12 +3082,16 @@ async function initializeDeviceSession(port, connectionId) {
   const statusSync = preloadActiveStatusZones()
   const results = await Promise.allSettled([capabilitySync, runtimeAssetSync, statusSync])
   if (!isCurrentDeviceSession(port, connectionId)) return
-  if (results[1].status === 'fulfilled' && results[1].value === false) return
   if (results[0].status === 'rejected') {
     report('runtime-capability-sync-error', { message: String(results[0].reason) })
   }
   if (results[1].status === 'rejected') {
     report('runtime-asset-sync-error', { message: String(results[1].reason) })
+  } else if (results[1].value === false) {
+    // Runtime assets are optional presentation state. Do not abandon the
+    // status zones, bindings, and now-playing sync when an asset transfer
+    // races a reconnect or an older firmware rejects one asset packet.
+    report('runtime-asset-sync-incomplete')
   }
   // A Teensy can enumerate twice during a cold reconnect. If the first
   // status batch raced that transient disconnect, resend it after the port
