@@ -3042,6 +3042,9 @@ async function initializeDeviceSession(port, connectionId) {
   if (!isCurrentDeviceSession(port, connectionId)) return
 
   syncVisualPreferences(port)
+  // Collection routing is transient firmware state and must be restored on
+  // every connection, not only when a carousel is first opened.
+  syncCollectionInputBinding(port)
   // These startup operations are independent. Dispatch them together so the
   // home-screen zones become visible as one initial state instead of waiting
   // behind glyph/art uploads or artificial inter-packet delays.
