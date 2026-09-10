@@ -236,6 +236,19 @@ test('ArtworkTransport selects the firmware-advertised transport without provide
   assert.deepEqual(calls, [['keyed', 3], ['direct', 3]])
 })
 
+test('ArtworkTransport falls back to direct art after a keyed-cache rejection', async () => {
+  const calls = []
+  const transport = createArtworkTransport({
+    supportsKeyedCache: () => true,
+    sendKeyed: async () => { calls.push('keyed'); throw new Error('rejected') },
+    onKeyedFailure: error => calls.push(`downgrade:${error.message}`),
+    sendDirect: async value => { calls.push(`direct:${value.slot}`); return true },
+  })
+  const request = { port: {}, session: {}, slot: 4, itemIndex: 3, title: 'Test', artwork: {}, isCurrent: () => true }
+  assert.equal(await transport.send(request), true)
+  assert.deepEqual(calls, ['keyed', 'downgrade:rejected', 'direct:4'])
+})
+
 test('SerialLifecycle cleans up listeners across stop', () => {
   const calls = []
   const listeners = []

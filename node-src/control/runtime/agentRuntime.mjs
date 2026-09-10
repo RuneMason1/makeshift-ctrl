@@ -372,6 +372,10 @@ const artworkTransport = createArtworkTransport({
     }
     return true
   },
+  onKeyedFailure: error => {
+    deviceCacheProtocolVersion = 0
+    report('device-cache-protocol-downgraded', { message: String(error) })
+  },
   sendDirect: ({ port, session, slot, itemIndex, title, artwork, isCurrent }) =>
     sendDirectArtwork(port, session, slot, itemIndex, title, artwork.bytes, isCurrent),
 })
