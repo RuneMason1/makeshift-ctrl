@@ -2487,6 +2487,13 @@ function loadProfile() {
   }
   const nextVisualPreferences = normalizeVisualPreferences(config?.visualPreferences)
   const layer = config?.deviceLayout?.layers?.[0] ?? []
+  if (!Array.isArray(layer) || layer.some(entry =>
+      !Array.isArray(entry) || entry.length < 2 ||
+      typeof entry[0] !== 'string' || typeof entry[1] !== 'string' ||
+      entry[0].length === 0 || entry[1].length === 0)) {
+    report('profile-reload-rejected', { message: 'Invalid device layout entries' })
+    return false
+  }
   const nextMappings = new Map(layer.map(([eventName, cueId]) =>
     [eventName, cueId.replaceAll('\\', '/')]))
   const nextModules = new Map()
