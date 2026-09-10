@@ -2494,6 +2494,10 @@ function loadProfile() {
     report('profile-reload-rejected', { message: 'Invalid device layout entries' })
     return false
   }
+  if (new Set(layer.map(entry => entry[0])).size !== layer.length) {
+    report('profile-reload-rejected', { message: 'Duplicate device layout event' })
+    return false
+  }
   const nextMappings = new Map(layer.map(([eventName, cueId]) =>
     [eventName, cueId.replaceAll('\\', '/')]))
   const nextModules = new Map()
