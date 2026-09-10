@@ -353,12 +353,23 @@ const legacyDirectArtTransport = createLegacyDirectArtTransport({
 const artworkTransport = createArtworkTransport({
   supportsKeyedCache: () => deviceCacheProtocolVersion >= CACHE_PROTOCOL_VERSION,
   sendKeyed: async ({ port, session, itemIndex, artwork, isCurrent }) => {
-    const key = await ensureDeviceAsset(artwork.assetKey, artwork.bytes)
+    let key = await ensureDeviceAsset(artwork.assetKey, artwork.bytes)
     if (!isCurrent()) return false
     const bind = Buffer.allocUnsafe(5)
     bind.writeUInt32BE(key, 0)
     bind[4] = itemIndex
-    await sendConfirmedCachePacket(port, CACHE_FILE_BIND, bind)
+    try {
+      await sendConfirmedCachePacket(port, CACHE_FILE_BIND, bind)
+    } catch (error) {
+      // A device reboot can discard RAM while a transient disconnect leaves
+      // the host's residency set intact. Retry once as a cold cache only when
+      // the device rejects the bind; ordinary reconnects avoid re-uploading.
+      deviceAssetKeys.delete(key)
+      key = await ensureDeviceAsset(artwork.assetKey, artwork.bytes)
+      if (!isCurrent()) return false
+      bind.writeUInt32BE(key, 0)
+      await sendConfirmedCachePacket(port, CACHE_FILE_BIND, bind)
+    }
     return true
   },
   sendDirect: ({ port, session, slot, itemIndex, title, artwork, isCurrent }) =>
@@ -3299,7 +3310,6 @@ function detachPort() {
   activeDeviceFingerprint = null
   firmwareAcks.clear()
   legacyArtworkResidency.reset()
-  deviceAssetKeys.clear()
   deviceCacheProtocolVersion = 0
   deviceCapabilities = null
   indicatorSupported = false
