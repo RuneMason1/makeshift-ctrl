@@ -582,6 +582,9 @@ function cancelSteamArtworkTransfers() {
   ++artworkTransferId
   requestedArtworkCenter = null
   clearTimeout(artworkTimer)
+  clearTimeout(plexCollection.preloadTimer)
+  plexCollection.preloadTimer = undefined
+  plexCollection.initialArtworkQueued = false
   lastArtworkCenterIndex = null
   initialArtworkQueued = false
 }
