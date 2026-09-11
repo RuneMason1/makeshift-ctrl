@@ -10,13 +10,15 @@ export const PROTOCOL = Object.freeze({
     featureBitsOffset: 10,
     packetBodyLimitOffset: 11,
     cacheBytesOffset: 13,
+    firmwareVersionOffset: 17,
+    firmwareVersionLength: 4,
   }),
 })
 
 export function parseDeviceCapabilities(packet) {
   const layout = PROTOCOL.capabilityLayout
   if (!packet || packet[0] !== PROTOCOL.capabilityPacket || packet.length < layout.minLength) return null
-  return Object.freeze({
+  const capabilities = {
     runtimeProtocol: packet[1],
     maxComponents: packet[2],
     maxAssets: packet[5],
@@ -25,5 +27,12 @@ export function parseDeviceCapabilities(packet) {
     featureBits: packet[layout.featureBitsOffset],
     packetBodyLimit: (packet[layout.packetBodyLimitOffset] << 8) | packet[layout.packetBodyLimitOffset + 1],
     cacheBytes: packet.readUInt32BE(layout.cacheBytesOffset),
-  })
+  }
+  if (packet.length >= layout.firmwareVersionOffset + layout.firmwareVersionLength) {
+    capabilities.firmwareVersion = [...packet.subarray(
+      layout.firmwareVersionOffset,
+      layout.firmwareVersionOffset + layout.firmwareVersionLength,
+    )]
+  }
+  return Object.freeze(capabilities)
 }

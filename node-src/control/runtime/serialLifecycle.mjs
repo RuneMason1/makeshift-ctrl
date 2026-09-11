@@ -58,6 +58,16 @@ export class SerialLifecycle {
     return true
   }
 
+  recycle(reason) {
+    if (!this.started || this.yielded) return false
+    this.cancelRecovery()
+    this.serial.stopAutoScan()
+    this.closeAuthorityPorts()
+    this.report('serial-recycled', { reason })
+    this.serial.startAutoScan()
+    return true
+  }
+
   scheduleRecovery(reason, { delayMs = 150, beforeReset = () => {} } = {}) {
     if (!this.started || this.yielded || this.recoveryTimer) return false
     this.report('serial-recovery-scheduled', { reason, delayMs })

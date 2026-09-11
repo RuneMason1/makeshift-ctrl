@@ -253,6 +253,7 @@ const teensyLoader = process.env.MAKESHIFT_TEENSY_LOADER ??
   join(process.env.USERPROFILE, '.platformio', 'packages', 'tool-teensy',
     'teensy_loader_cli.exe')
 const teensyPostCompile = join(dirname(teensyLoader), 'teensy_post_compile.exe')
+const EXPECTED_FIRMWARE_VERSION = [0, 0, 3, 1]
 const firmwareArchiveRoot = join(dirname(firmwareRoot), '.codex', 'checkpoints')
 const windowsRecoveryScript = join(coreHostRoot,
   'windows-recovery.ps1')
@@ -274,6 +275,7 @@ let coreStarted = false
 let coreInput
 let profileReloadTimer
 let statusRetryTimer
+const surfaceRetryTimers = new Set()
 let firmwareResetTimer
 let carouselSourceRefresh
 const coreTimers = []
@@ -456,9 +458,24 @@ function queueDevicePacket(port, type, body = Buffer.alloc(0), { key, priority =
     replace,
     execute: async () => {
       if (port !== activePort || connectionId !== deviceConnectionId) return false
-      return sendCachePacket(port, type, body)
+      // SerialPort's sendPacket returns void on success; only an explicit
+      // false indicates that the write could not be accepted.
+      return sendCachePacket(port, type, body) !== false
     },
   })
+}
+
+async function sendStatusPacketWithRetry(port, type, body, label) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    if (port !== activePort) return false
+    if (await queueDevicePacket(port, type, body, { priority: 0 })) return true
+    if (attempt < 3) await new Promise(resolve => setTimeout(resolve, 150 * attempt))
+  }
+  report('status-packet-failed', { label, type })
+  if (port === activePort && deviceCapabilities) {
+    serialLifecycle.recycle('application-packet-rejected')
+  }
+  return false
 }
 
 function isCurrentCarouselTransfer(session, port) {
@@ -666,7 +683,16 @@ async function openCarouselSession(session, options = {}) {
         const bind = Buffer.alloc(5)
         bind.writeUInt32BE(key, 0)
         bind[4] = index
-        await sendConfirmedCachePacket(port, CACHE_FILE_BIND, bind)
+        try {
+          await sendConfirmedCachePacket(port, CACHE_FILE_BIND, bind)
+        } catch (error) {
+          // A stale firmware can advertise keyed cache support but reject
+          // binds. Downgrade for this connection and keep the carousel alive;
+          // artwork will use the legacy direct-slot transport instead.
+          deviceCacheProtocolVersion = 0
+          report('device-cache-protocol-downgraded', { message: String(error), phase: 'carousel-bind' })
+          break
+        }
       }
     }
     if (!await queueDevicePacket(port, GAME_LIST_COMMIT, Buffer.alloc(0), {
@@ -817,19 +843,19 @@ async function readGoXlrStatus() {
 function sendGoXlrStatus(adjusting, name, percent, muted = false) {
   if (!activePort) return
   const label = boundedTitle(name)
-  void queueDevicePacket(activePort, GOXLR_STATUS, Buffer.concat([
+  return sendStatusPacketWithRetry(activePort, GOXLR_STATUS, Buffer.concat([
     Buffer.from([(adjusting ? 1 : 0) | (muted ? 2 : 0), Math.max(0, Math.min(100, percent))]), label,
-  ]))
+  ]), 'goxlr')
 }
 
 function sendStatusBadge(zone, adjusting, name, percent, inactive = false) {
   if (!activePort) return
   const label = boundedTitle(name)
-  void queueDevicePacket(activePort, STATUS_BADGE, Buffer.concat([
+  return sendStatusPacketWithRetry(activePort, STATUS_BADGE, Buffer.concat([
     Buffer.from([zone, (adjusting ? 1 : 0) | (inactive ? 2 : 0),
       Math.max(0, Math.min(100, percent))]),
     label,
-  ]))
+  ]), `status-zone-${zone}`)
 }
 
 function canonicalScreenZone(name) {
@@ -1639,13 +1665,35 @@ async function seekHomeAssistantMediaRelative(deltaSeconds, { entityId: pinnedEn
   await homeAssistantRequest('/api/services/homeassistant/update_entity', {
     method: 'POST', body: JSON.stringify({ entity_id: entityId }),
   })
-  const state = await homeAssistantRequest(`/api/states/${encodeURIComponent(entityId)}`)
+  let state
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const restState = await homeAssistantRequest(`/api/states/${encodeURIComponent(entityId)}`)
+    const websocketStates = await callHomeAssistantWebSocket({ type: 'get_states' }).catch(() => [])
+    const websocketState = Array.isArray(websocketStates)
+      ? websocketStates.find(candidate => candidate?.entity_id === entityId)
+      : undefined
+    const candidates = [restState, websocketState].filter(Boolean)
+    state = candidates.sort((a, b) =>
+      Date.parse(b?.attributes?.media_position_updated_at ?? '') -
+      Date.parse(a?.attributes?.media_position_updated_at ?? ''))[0]
+    const sampleAt = Date.parse(state?.attributes?.media_position_updated_at ?? '')
+    if (Number.isFinite(sampleAt) && sampleAt >= requestedAt - 1000) {
+      report('media-seek-fresh-state', {
+        entityId, source: state === restState ? 'rest' : 'websocket', sampleAt,
+      })
+      break
+    }
+    if (attempt < 5) await new Promise(resolve => setTimeout(resolve, 500))
+  }
   let plan
   try { plan = relativeSeek.plan(entityId, state, deltaSeconds, Date.now(), requestedAt) }
   catch (error) {
     report('media-seek-withheld', { entityId, deltaSeconds,
       positionUpdatedAt: state?.attributes?.media_position_updated_at ?? null,
       reason: String(error) })
+    // Show an intentional safety refusal without claiming that a seek ran.
+    // Do not use LED_EFFECT here: packet 28 is CACHE_FILE_CHUNK on firmware.
+    sendStatusBadge(0, false, 'Seek unavailable', 0, true)
     return false
   }
   const target = plan.target
@@ -2194,17 +2242,17 @@ function preloadActiveStatusZones() {
   return Promise.allSettled([
     readSelectedGoXlrStatus(),
     refreshHomeAssistantLightAvailability(),
-  ]).then(([goXlrResult, lightResult]) => {
+  ]).then(async ([goXlrResult, lightResult]) => {
     if (activePort !== port || deviceConnectionId !== connectionId) return
     if (goXlrResult.status === 'fulfilled') {
       const status = goXlrResult.value
-      sendGoXlrStatus(false, status.label, status.percent, status.muted)
+      await sendGoXlrStatus(false, status.label, status.percent, status.muted)
     } else {
       report('goxlr-error', { message: String(goXlrResult.reason) })
     }
     if (lightResult.status === 'fulfilled' && lightResult.value) {
       const status = lightResult.value
-      sendStatusBadge(1, false, status.label, status.percent, status.inactive)
+      await sendStatusBadge(1, false, status.label, status.percent, status.inactive)
     } else if (lightResult.status === 'rejected') {
       report('home-assistant-error', { message: String(lightResult.reason) })
     }
@@ -2605,6 +2653,26 @@ function syncCollectionInputBinding(port = activePort) {
   if (!port || !binding) return
   void queueDevicePacket(port, COLLECTION_INPUT_BINDING,
     Buffer.from([binding.dialIndex, binding.buttonIndex]))
+}
+
+function scheduleDeviceSurfaceResync(port, connectionId) {
+  for (const timer of surfaceRetryTimers) clearTimeout(timer)
+  surfaceRetryTimers.clear()
+  for (const delay of [750, 2500, 6000]) {
+    const timer = setTimeout(() => {
+      surfaceRetryTimers.delete(timer)
+      if (!isCurrentDeviceSession(port, connectionId)) return
+      syncVisualPreferences(port)
+      syncCollectionInputBinding(port)
+      void preloadActiveStatusZones().catch(error =>
+        report('surface-resync-error', { delay, message: String(error) }))
+      lastNowPlaying = ''
+      publishNowPlaying()
+      report('surface-resync', { delay, port: port.devicePath })
+    }, delay)
+    timer.unref()
+    surfaceRetryTimers.add(timer)
+  }
 }
 
 function requiredRuntimeAssets() {
@@ -3108,6 +3176,7 @@ async function initializeDeviceSession(port, connectionId) {
   await new Promise(resolve => setTimeout(resolve, 100))
   if (!isCurrentDeviceSession(port, connectionId)) return
   report('device-sync-complete', { port: port.devicePath })
+  scheduleDeviceSurfaceResync(port, connectionId)
   void prewarmLocalCarouselArtwork().catch(error =>
     report('local-carousel-artwork-prewarm-error', { message: String(error) }))
 }
@@ -3129,6 +3198,9 @@ function attachPort(fp) {
       deviceCapabilities = capabilities
       deviceCacheProtocolVersion = capabilities.cacheProtocol
       advertisedDeviceCacheBytes = capabilities.cacheBytes
+      // Feature bit 0 is the typed LED-indicator capability. Do not depend
+      // on the optional MKSHFT_LED debug line, which can be lost on reconnect.
+      indicatorSupported = Boolean(capabilities.featureBits & 0x01)
       report('device-capabilities', capabilities)
       if (deviceCacheProtocolVersion >= CACHE_PROTOCOL_VERSION) {
         void primeDeviceCarouselArtwork().catch(error =>
@@ -3309,6 +3381,8 @@ function attachPort(fp) {
 function detachPort() {
   ++deviceConnectionId
   ++artworkTransferId
+  for (const timer of surfaceRetryTimers) clearTimeout(timer)
+  surfaceRetryTimers.clear()
   requestedArtworkCenter = null
   clearTimeout(artworkTimer)
   for (const gesture of buttonGestures.values()) clearTimeout(gesture.timer)
@@ -3375,14 +3449,16 @@ async function runPrebuiltFirmwareLoader(imagePath) {
   // Use the same supported Windows uploader as PlatformIO's teensy-gui path.
   // The standalone CLI has repeatedly failed block writes on this Teensy 4.0.
   const imageName = basename(imagePath, extname(imagePath))
-  return new Promise((resolve, reject) => {
-    const child = spawn(teensyPostCompile, [
+  const args = [
       `-file=${imageName}`,
       `-path=${dirname(imagePath)}`,
       `-tools=${dirname(teensyPostCompile)}`,
       '-board=TEENSY40',
       '-reboot',
-    ], { windowsHide: true })
+    ]
+  report('firmware-loader-started', { executable: teensyPostCompile, args })
+  return new Promise((resolve, reject) => {
+    const child = spawn(teensyPostCompile, args, { windowsHide: true })
     let stdout = ''
     let stderr = ''
     const timeout = setTimeout(() => {
@@ -3398,8 +3474,11 @@ async function runPrebuiltFirmwareLoader(imagePath) {
     child.on('close', code => {
       clearTimeout(timeout)
       if (code === 0) resolve({ stdout, stderr })
-      else reject(new Error([stdout, stderr].filter(Boolean).join('\n') ||
-        `Teensy loader exited ${code}`))
+      else {
+        const output = [stdout, stderr].filter(Boolean).join('\n').trim()
+        report('firmware-loader-exited', { code, stdout, stderr })
+        reject(new Error(output || `Teensy loader exited ${code}`))
+      }
     })
   })
 }
@@ -3433,6 +3512,24 @@ async function waitForFirmwareHandshake(timeoutMs) {
     await new Promise(resolve => setTimeout(resolve, 250))
   }
   throw new Error(`MakeShift firmware did not complete a typed handshake within ${timeoutMs / 1000} seconds`)
+}
+
+function firmwareVersionMatches(actual) {
+  return Array.isArray(actual) && actual.length === EXPECTED_FIRMWARE_VERSION.length &&
+    actual.every((value, index) => value === EXPECTED_FIRMWARE_VERSION[index])
+}
+
+async function ensureTeensyLoader() {
+  const running = await runProcess('tasklist.exe', ['/FI', 'IMAGENAME eq teensy.exe', '/FO', 'CSV'])
+    .catch(() => '')
+  if (/"teensy\.exe"/i.test(running)) return
+  report('firmware-loader-starting', { executable: teensyLoader })
+  const child = spawn(teensyLoader, [], { detached: true, windowsHide: true, stdio: 'ignore' })
+  child.unref()
+  await new Promise(resolve => setTimeout(resolve, 1000))
+  const started = await runProcess('tasklist.exe', ['/FI', 'IMAGENAME eq teensy.exe', '/FO', 'CSV'])
+    .catch(() => '')
+  if (!/"teensy\.exe"/i.test(started)) throw new Error('Teensy Loader did not start')
 }
 
 async function verifyCheckpointFirmware(imagePath) {
@@ -3472,11 +3569,14 @@ async function flashFirmware(prebuiltPath) {
     }
   }
   firmwareUpdateInProgress = true
+  deviceCapabilities = null
+  deviceCacheProtocolVersion = 0
   yieldSerial()
   let serialResumed = false
   report('firmware-update-started', { firmwareHex: imagePath, prebuilt: Boolean(prebuiltPath) })
   try {
     await new Promise(resolve => setTimeout(resolve, 500))
+    if (prebuiltPath) await ensureTeensyLoader()
     const result = prebuiltPath
       ? await runPrebuiltFirmwareLoader(imagePath)
       : await runFirmwareLoader()
@@ -3485,6 +3585,9 @@ async function flashFirmware(prebuiltPath) {
     serialResumed = true
     resetSerialScan('firmware-application-returned')
     const capabilities = await waitForFirmwareHandshake(30000)
+    if (!firmwareVersionMatches(capabilities.firmwareVersion)) {
+      throw new Error(`Firmware identity mismatch; expected ${EXPECTED_FIRMWARE_VERSION.join('.')} but received ${capabilities.firmwareVersion?.join('.') ?? 'none'}`)
+    }
     report('firmware-update-complete', {
       firmwareHex: imagePath, prebuilt: Boolean(prebuiltPath), capabilities,
     })
@@ -3520,6 +3623,8 @@ export async function stopCore({ exitProcess = false } = {}) {
   profileReloadTimer = undefined
   clearTimeout(statusRetryTimer)
   statusRetryTimer = undefined
+  for (const timer of surfaceRetryTimers) clearTimeout(timer)
+  surfaceRetryTimers.clear()
   clearTimeout(firmwareResetTimer)
   firmwareResetTimer = undefined
   if (server.listening) server.close()
